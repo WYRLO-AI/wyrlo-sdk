@@ -20,7 +20,7 @@ Index sans copie (mode B) : :class:`WyrloRetriever` cherche dans l'index de WYRL
 le texte chez vous ; ses documents portent l'adresse du passage, que ``guarded_chain``
 transmet à WYRLO (un passage modifié depuis son indexation est signalé « périmé »)::
 
-    retriever = WyrloRetriever(client=Wyrlo(), read=lire_chez_vous, k=5)
+    retriever = WyrloRetriever(client=Wyrlo(), read=lire_chez_vous, k=8)
     rag = guarded_chain(retriever, prompt | llm)
 """
 

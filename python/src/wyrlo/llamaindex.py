@@ -21,7 +21,7 @@ Index sans copie (mode B) : :class:`WyrloRetriever` cherche dans l'index de WYRL
 le texte chez vous ; ses nœuds portent l'adresse du passage, que ``GuardedQueryEngine``
 transmet à WYRLO (un passage modifié depuis son indexation est signalé « périmé »)::
 
-    engine = GuardedQueryEngine(WyrloRetriever(Wyrlo(), lire_chez_vous, k=5), llm)
+    engine = GuardedQueryEngine(WyrloRetriever(Wyrlo(), lire_chez_vous, k=8), llm)
 """
 
 from typing import Any, Dict, List, Optional, Sequence

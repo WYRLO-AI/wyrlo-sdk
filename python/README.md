@@ -162,9 +162,20 @@ personnelles, calcule les vecteurs (Mistral AI, point d'accès européen), puis 
 texte : seuls l'adresse, l'empreinte et le vecteur de chaque passage sont gardés.
 
 ```python
-wyrlo.index("docs/cgv.md", "2026-11-07", text=contenu, labels=["cgv"])
+wyrlo.index(
+    "docs/cgv.md",
+    "2026-11-07",
+    title="Conditions générales de vente",  # recommandé : meilleure recherche, jamais conservé
+    text=contenu,
+    labels=["cgv"],
+)
+# Beaucoup de documents : 100 par appel, un résultat par document.
+lot = wyrlo.index_many(
+    [{"id": f.chemin, "version": f.version, "title": f.titre, "text": f.texte} for f in fichiers]
+)
 
-res = wyrlo.search(question, k=5)
+# 8 passages (environ 600 caractères chacun) : assez de contexte pour la réponse.
+res = wyrlo.search(question, k=8)
 passages = [
     {
         "id": f"{r['document']}#{r['start']}",
@@ -229,11 +240,11 @@ fait la même chose et garde l'adresse jusqu'à `guard` :
 ```python
 from wyrlo.langchain import WyrloRetriever, guarded_chain
 
-rag = guarded_chain(WyrloRetriever(client=wyrlo, read=read, k=5), prompt | llm)
+rag = guarded_chain(WyrloRetriever(client=wyrlo, read=read, k=8), prompt | llm)
 
 from wyrlo.llamaindex import GuardedQueryEngine, WyrloRetriever
 
-engine = GuardedQueryEngine(WyrloRetriever(wyrlo, read, k=5), llm)
+engine = GuardedQueryEngine(WyrloRetriever(wyrlo, read, k=8), llm)
 ```
 
 ## Tests

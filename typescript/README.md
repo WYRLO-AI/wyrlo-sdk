@@ -153,9 +153,19 @@ personnelles, calcule les vecteurs (Mistral AI, point d'accès européen), puis 
 texte : seuls l'adresse, l'empreinte et le vecteur de chaque passage sont gardés.
 
 ```ts
-await wyrlo.index("docs/cgv.md", { version: "2026-11-07", text: contenu, labels: ["cgv"] });
+await wyrlo.index("docs/cgv.md", {
+  version: "2026-11-07",
+  title: "Conditions générales de vente", // recommandé : meilleure recherche, jamais conservé
+  text: contenu,
+  labels: ["cgv"],
+});
+// Beaucoup de documents : 100 par appel, un résultat par document.
+const lot = await wyrlo.indexMany(
+  fichiers.map((f) => ({ id: f.chemin, version: f.version, title: f.titre, text: f.texte })),
+);
 
-const { results, degraded } = await wyrlo.search({ question, k: 5 });
+// 8 passages (environ 600 caractères chacun) : assez de contexte pour la réponse.
+const { results, degraded } = await wyrlo.search({ question, k: 8 });
 // Relisez le texte chez vous, puis vérifiez la réponse avec l'adresse de chaque passage :
 const passages = results.map(({ document, version, start, length, fingerprint }) => ({
   id: `${document}#${start}`,
