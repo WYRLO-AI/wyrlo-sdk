@@ -1,0 +1,55 @@
+{
+  "name": "@wyrlo/mcp",
+  "version": "0.1.0",
+  "description": "Serveur MCP de WYRLO : vos agents cherchent dans l'index sans copie et font vérifier leur réponse avant de répondre.",
+  "license": "Apache-2.0",
+  "author": "Mayeul FLORY, entrepreneur individuel (FUSION-IA) <contact@wyrlo.io>",
+  "homepage": "https://www.wyrlo.io",
+  "keywords": [
+    "mcp",
+    "rag",
+    "llm",
+    "agents",
+    "hallucination",
+    "wyrlo"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "bin": {
+    "wyrlo-mcp": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "node scripts/confirm-publish.mjs && npm run build && npm test"
+  },
+  "dependencies": {
+    "@wyrlo/sdk": "file:../typescript"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WYRLO-AI/wyrlo-sdk.git",
+    "directory": "mcp"
+  }
+}

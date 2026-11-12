@@ -1,0 +1,54 @@
+{
+  "name": "@wyrlo/sdk",
+  "version": "0.1.0",
+  "description": "SDK TypeScript de WYRLO : dites « je ne sais pas » plutôt qu'une réponse fausse.",
+  "license": "Apache-2.0",
+  "author": "Mayeul FLORY, entrepreneur individuel (FUSION-IA) <contact@wyrlo.io>",
+  "homepage": "https://www.wyrlo.io",
+  "keywords": [
+    "rag",
+    "llm",
+    "reliability",
+    "hallucination",
+    "guardrails",
+    "wyrlo"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "node scripts/confirm-publish.mjs && npm run build && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WYRLO-AI/wyrlo-sdk.git",
+    "directory": "typescript"
+  }
+}

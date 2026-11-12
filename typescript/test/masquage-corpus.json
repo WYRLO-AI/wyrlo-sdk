@@ -1,0 +1,279 @@
+[
+  {
+    "textes": ["Écrire à jeanne.martin+sav@exemple.fr demain"],
+    "attendu": ["Écrire à [EMAIL_1] demain"],
+    "decompte": {
+      "EMAIL": 1
+    }
+  },
+  {
+    "textes": ["Appelez le 06 12 34 56 78."],
+    "attendu": ["Appelez le [TELEPHONE_1]."],
+    "decompte": {
+      "TELEPHONE": 1
+    }
+  },
+  {
+    "textes": ["ou le +33 6 12 34 56 78"],
+    "attendu": ["ou le [TELEPHONE_1]"],
+    "decompte": {
+      "TELEPHONE": 1
+    }
+  },
+  {
+    "textes": ["ou le 01.23.45.67.89"],
+    "attendu": ["ou le [TELEPHONE_1]"],
+    "decompte": {
+      "TELEPHONE": 1
+    }
+  },
+  {
+    "textes": ["London: +44 20 7946 0958"],
+    "attendu": ["London: [TELEPHONE_1]"],
+    "decompte": {
+      "TELEPHONE": 1
+    }
+  },
+  {
+    "textes": ["IBAN FR76 3000 6000 0112 3456 7890 189 merci"],
+    "attendu": ["IBAN [IBAN_1] merci"],
+    "decompte": {
+      "IBAN": 1
+    }
+  },
+  {
+    "textes": ["IBAN DE89370400440532013000"],
+    "attendu": ["IBAN [IBAN_1]"],
+    "decompte": {
+      "IBAN": 1
+    }
+  },
+  {
+    "textes": ["IBAN FR76 3000 6000 0112 3456 7890 188"],
+    "attendu": ["IBAN FR76 3000 6000 0112 3456 7890 188"],
+    "decompte": {}
+  },
+  {
+    "textes": ["carte 4111 1111 1111 1111 expirée"],
+    "attendu": ["carte [CARTE_1] expirée"],
+    "decompte": {
+      "CARTE": 1
+    }
+  },
+  {
+    "textes": ["carte 4111 1111 1111 1112"],
+    "attendu": ["carte 4111 1111 1111 1112"],
+    "decompte": {}
+  },
+  {
+    "textes": ["NIR 1 85 05 78 006 084 91"],
+    "attendu": ["NIR [NIR_1]"],
+    "decompte": {
+      "NIR": 1
+    }
+  },
+  {
+    "textes": ["mon numéro de sécurité sociale : 1 85 05 78 006 084"],
+    "attendu": ["mon numéro de sécurité sociale : [NIR_1]"],
+    "decompte": {
+      "NIR": 1
+    }
+  },
+  {
+    "textes": ["référence 1 85 05 78 006 084 12"],
+    "attendu": ["référence 1 85 05 78 006 084 12"],
+    "decompte": {}
+  },
+  {
+    "textes": ["depuis 192.168.1.10 hier"],
+    "attendu": ["depuis [IP_1] hier"],
+    "decompte": {
+      "IP": 1
+    }
+  },
+  {
+    "textes": ["hôte 2001:db8::1 joignable"],
+    "attendu": ["hôte [IP_1] joignable"],
+    "decompte": {
+      "IP": 1
+    }
+  },
+  {
+    "textes": ["passeport n° 12AB34567"],
+    "attendu": ["passeport n° [PIECE_1]"],
+    "decompte": {
+      "PIECE": 1
+    }
+  },
+  {
+    "textes": ["lot 12AB34567 expédié"],
+    "attendu": ["lot 12AB34567 expédié"],
+    "decompte": {}
+  },
+  {
+    "textes": ["Livraison au 12 rue des Lilas, 75011 Paris. Merci"],
+    "attendu": ["Livraison au [ADRESSE_1]. Merci"],
+    "decompte": {
+      "ADRESSE": 1
+    }
+  },
+  {
+    "textes": ["Bureau : 3 bis avenue Foch, 69006 Lyon"],
+    "attendu": ["Bureau : [ADRESSE_1]"],
+    "decompte": {
+      "ADRESSE": 1
+    }
+  },
+  {
+    "textes": ["Office at 221 Baker Street"],
+    "attendu": ["Office at [ADRESSE_1]"],
+    "decompte": {
+      "ADRESSE": 1
+    }
+  },
+  {
+    "textes": ["clé sk_live_abcdefghijklmnop"],
+    "attendu": ["clé [SECRET_1]"],
+    "decompte": {
+      "SECRET": 1
+    }
+  },
+  {
+    "textes": ["Authorization: Bearer abcdefghijklmnopqrstuvwxyz0123"],
+    "attendu": ["Authorization: Bearer [SECRET_1]"],
+    "decompte": {
+      "SECRET": 1
+    }
+  },
+  {
+    "textes": ["jeton eyJhbGciOiJIUzI1.eyJzdWIiOiIxMjM0.SflKxwRJSMeKKF2QT4fw"],
+    "attendu": ["jeton [SECRET_1]"],
+    "decompte": {
+      "SECRET": 1
+    }
+  },
+  {
+    "textes": ["clé WYRLO wyr_live_abcdefghijklmnop1234 à ne pas partager"],
+    "attendu": ["clé WYRLO [SECRET_1] à ne pas partager"],
+    "decompte": {
+      "SECRET": 1
+    }
+  },
+  {
+    "textes": ["clé signée wyr_test_s1.eyJwIjoiYWJjZGVm.c2lnbmF0dXJl."],
+    "attendu": ["clé signée [SECRET_1]."],
+    "decompte": {
+      "SECRET": 1
+    }
+  },
+  {
+    "textes": ["Jeanne Martin, de la société Acme, a appelé."],
+    "attendu": ["Jeanne Martin, de la société Acme, a appelé."],
+    "decompte": {}
+  },
+  {
+    "textes": [
+      "Commande 48213 du 05/11/2026 à 12:30:45, 1 234,56 € TTC, version 1.2.3, délai 30 jours."
+    ],
+    "attendu": [
+      "Commande 48213 du 05/11/2026 à 12:30:45, 1 234,56 € TTC, version 1.2.3, délai 30 jours."
+    ],
+    "decompte": {}
+  },
+  {
+    "textes": [
+      "Contact : sav@exemple.fr ou 06 12 34 56 78",
+      "Réponse : écrivez à SAV@exemple.fr, ou à compta@exemple.fr"
+    ],
+    "attendu": [
+      "Contact : [EMAIL_1] ou [TELEPHONE_1]",
+      "Réponse : écrivez à [EMAIL_1], ou à [EMAIL_2]"
+    ],
+    "decompte": {
+      "EMAIL": 3,
+      "TELEPHONE": 1
+    }
+  },
+  {
+    "textes": ["06 12 34 56 78", "+33 6 12 34 56 78"],
+    "attendu": ["[TELEPHONE_1]", "[TELEPHONE_1]"],
+    "decompte": {
+      "TELEPHONE": 2
+    }
+  },
+  {
+    "textes": [
+      "Comment joindre le service client ?",
+      "Écrivez à aide@boutique-exemple.fr ou appelez le 01 84 88 12 34.",
+      "Service client : aide@boutique-exemple.fr, du lundi au vendredi. Téléphone : 01 84 88 12 34."
+    ],
+    "attendu": [
+      "Comment joindre le service client ?",
+      "Écrivez à [EMAIL_1] ou appelez le [TELEPHONE_1].",
+      "Service client : [EMAIL_1], du lundi au vendredi. Téléphone : [TELEPHONE_1]."
+    ],
+    "decompte": {
+      "EMAIL": 2,
+      "TELEPHONE": 2
+    }
+  },
+  {
+    "textes": ["Le remboursement arrive sous 14 jours sur l'IBAN GB82 WEST 1234 5698 7654 32."],
+    "attendu": ["Le remboursement arrive sous 14 jours sur l'IBAN [IBAN_1]."],
+    "decompte": {
+      "IBAN": 1
+    }
+  },
+  {
+    "textes": ["Serveur 10.0.0.256 hors plage, 10.0.0.25 valide"],
+    "attendu": ["Serveur 10.0.0.256 hors plage, [IP_1] valide"],
+    "decompte": {
+      "IP": 1
+    }
+  },
+  {
+    "textes": ["Écrire à chloé.martin@exemple.fr ou à léa+sav@exemple.fr"],
+    "attendu": ["Écrire à [EMAIL_1] ou à [EMAIL_2]"],
+    "decompte": {
+      "EMAIL": 2
+    }
+  },
+  {
+    "textes": ["IBAN FR76 3000 6000 0112 3456 7890 189 BIC AGRIFRPP"],
+    "attendu": ["IBAN [IBAN_1] BIC AGRIFRPP"],
+    "decompte": {
+      "IBAN": 1
+    }
+  },
+  {
+    "textes": ["Comptes : FR76 3000 6000 0112 3456 7890 189 DE89 3704 0044 0532 0130 00"],
+    "attendu": ["Comptes : [IBAN_1] [IBAN_2]"],
+    "decompte": {
+      "IBAN": 2
+    }
+  },
+  {
+    "textes": ["SIRET 732 829 320 00074, carte 4111 1111 1111 1111"],
+    "attendu": ["SIRET 732 829 320 00074, carte [CARTE_1]"],
+    "decompte": {
+      "CARTE": 1
+    }
+  },
+  {
+    "textes": ["Flat at 221B Baker Street.", "Bureau au 12B rue des Lilas, 75011 Paris."],
+    "attendu": ["Flat at [ADRESSE_1].", "Bureau au [ADRESSE_2]."],
+    "decompte": {
+      "ADRESSE": 2
+    }
+  },
+  {
+    "textes": ["Ferme située lieu-dit Les Granges, 33000 Bordeaux."],
+    "attendu": ["Ferme située lieu-dit Les Granges, 33000 Bordeaux."],
+    "decompte": {}
+  },
+  {
+    "textes": [""],
+    "attendu": [""],
+    "decompte": {}
+  }
+]

@@ -1,0 +1,11 @@
+{
+  "extends": "../typescript/tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"],
+    "allowImportingTsExtensions": true,
+    // Vérification des types et tests sur le source du SDK (son dist n'est pas versionné).
+    "paths": { "@wyrlo/sdk": ["../typescript/src/index.ts"] }
+  },
+  "include": ["src", "test"]
+}

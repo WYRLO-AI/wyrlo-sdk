@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wyrlo"
+version = "0.1.0"
+description = "SDK Python de WYRLO : dites « je ne sais pas » plutôt qu'une réponse fausse."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Mayeul FLORY, entrepreneur individuel (FUSION-IA)", email = "contact@wyrlo.io" }]
+keywords = ["rag", "llm", "reliability", "hallucination", "guardrails", "wyrlo"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+langchain = ["langchain-core>=1.0"]
+llamaindex = ["llama-index-core>=0.14"]
+
+[project.urls]
+Homepage = "https://www.wyrlo.io"
+Source = "https://github.com/WYRLO-AI/wyrlo-sdk"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+wyrlo = ["py.typed"]

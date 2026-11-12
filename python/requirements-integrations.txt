@@ -1,0 +1,10 @@
+# Versions testées des intégrations (scripts/deploy.sh, suite « SDK Python »).
+# La suite installe requirements-integrations.lock.txt, généré depuis ce fichier : toutes
+# les dépendances, indirectes comprises, figées avec l'empreinte de chaque fichier (audit
+# de sécurité du 20/10, SEC-03). Après un changement ici, régénérer le verrou (jamais à la
+# main), depuis la racine du dépôt :
+#   uv pip compile packages/sdk-python/requirements-integrations.txt --generate-hashes \
+#     --python-version 3.13 --no-header --no-annotate \
+#     -o packages/sdk-python/requirements-integrations.lock.txt
+langchain-core==1.6.6
+llama-index-core==0.14.25
