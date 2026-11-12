@@ -3,14 +3,14 @@
 SDK Python de [WYRLO](https://www.wyrlo.io) : votre RAG dit « je ne sais pas » plutôt
 qu'une réponse fausse. Python 3.9+, aucune dépendance. **Côté serveur uniquement.**
 
-Le paquet n'est pas encore publié sur PyPI : la version 0.1.0 est prête et sera publiée
-à l'ouverture, sur accord du fondateur. Documentation : https://www.wyrlo.io/docs.
-
-En attendant, installez-le depuis le dépôt :
-
 ```bash
-pip install /chemin/vers/wyrlo-sdk/python
+pip install wyrlo                      # SDK seul
+pip install "wyrlo[langchain]"         # avec LangChain
+pip install "wyrlo[llamaindex]"        # avec LlamaIndex
 ```
+
+Documentation : https://www.wyrlo.io/docs. L'accès à l'API se fait sur demande pour
+l'instant : https://www.wyrlo.io/fr/demander-un-acces.
 
 ## Utilisation
 

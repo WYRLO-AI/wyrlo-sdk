@@ -3,7 +3,7 @@
 Serveur MCP de WYRLO : votre agent cherche dans l'index sans copie et fait vérifier sa
 réponse avant de la donner. S'il n'est pas sûr, il dit « je ne sais pas ».
 
-> Not published yet: once published, run it with `npx @wyrlo/mcp`.
+Lancement : `npx @wyrlo/mcp` (Node 18+), avec votre clé dans `WYRLO_API_KEY`.
 
 ## Installation dans un client MCP
 

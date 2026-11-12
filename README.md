@@ -4,7 +4,7 @@ Official TypeScript and Python clients for the [WYRLO](https://www.wyrlo.io) API
 RAG answer against its sources before showing it, and say "I don't know" instead of a
 wrong answer.
 
-| Package | Folder | Install (once published) |
+| Package | Folder | Install |
 | --- | --- | --- |
 | `@wyrlo/sdk` (TypeScript, Node 18+) | [`typescript/`](typescript/) | `npm install @wyrlo/sdk` |
 | `wyrlo` (Python 3.9+, LangChain and LlamaIndex extras) | [`python/`](python/) | `pip install wyrlo` |

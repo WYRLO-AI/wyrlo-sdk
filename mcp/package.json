@@ -40,7 +40,7 @@
     "prepublishOnly": "node scripts/confirm-publish.mjs && npm run build && npm test"
   },
   "dependencies": {
-    "@wyrlo/sdk": "file:../typescript"
+    "@wyrlo/sdk": "^0.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

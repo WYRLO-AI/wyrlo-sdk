@@ -3,15 +3,12 @@
 SDK TypeScript de [WYRLO](https://www.wyrlo.io) : votre RAG dit « je ne sais pas »
 plutôt qu'une réponse fausse.
 
-Le paquet n'est pas encore publié sur npm : la version 0.1.0 est prête et sera publiée
-à l'ouverture, sur accord du fondateur. Documentation : https://www.wyrlo.io/docs.
-
-En attendant, installez-le depuis le dépôt :
-
 ```bash
-cd typescript && npm install && npm run build
-npm install /chemin/vers/wyrlo-sdk/typescript
+npm install @wyrlo/sdk
 ```
+
+Documentation : https://www.wyrlo.io/docs. L'accès à l'API se fait sur demande pour
+l'instant : https://www.wyrlo.io/fr/demander-un-acces.
 
 Node 18+, Deno, Bun. **Côté serveur uniquement** : la clé ne doit jamais atteindre un
 navigateur.
