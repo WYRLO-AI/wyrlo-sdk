@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/WYRLO-AI/wyrlo-sdk/blob/main/SECURITY.md
+    about: Report it privately by e-mail, never in a public issue.
+  - name: API access and account questions
+    url: https://www.wyrlo.io/fr/demander-un-acces
+    about: Request API access or ask about your WYRLO account.

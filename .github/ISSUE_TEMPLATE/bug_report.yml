@@ -1,0 +1,35 @@
+name: Bug report
+description: Something in an SDK or the MCP server does not work as documented.
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      options:
+        - "@wyrlo/sdk (TypeScript)"
+        - "wyrlo (Python)"
+        - "@wyrlo/mcp"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Package version and runtime
+      placeholder: "@wyrlo/sdk 0.1.0, Node 22"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+      description: >-
+        Include the smallest code that reproduces it. Never paste an API key, and remove
+        any personal or confidential data from questions, passages and answers.
+    validations:
+      required: true
+  - type: input
+    id: trace
+    attributes:
+      label: trace_id or request_id (optional)
+      description: Helps us find the call on our side. It contains no text.

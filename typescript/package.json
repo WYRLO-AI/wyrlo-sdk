@@ -1,16 +1,25 @@
 {
   "name": "@wyrlo/sdk",
   "version": "0.1.0",
-  "description": "SDK TypeScript de WYRLO : dites « je ne sais pas » plutôt qu'une réponse fausse.",
+  "description": "Stop RAG hallucinations: verify LLM answers against their sources and say \"I don't know\" instead of guessing.",
   "license": "Apache-2.0",
   "author": "Mayeul FLORY, entrepreneur individuel (FUSION-IA) <contact@wyrlo.io>",
   "homepage": "https://www.wyrlo.io",
+  "bugs": {
+    "url": "https://github.com/WYRLO-AI/wyrlo-sdk/issues"
+  },
   "keywords": [
     "rag",
     "llm",
-    "reliability",
     "hallucination",
+    "hallucination-detection",
     "guardrails",
+    "llm-guardrails",
+    "grounding",
+    "fact-checking",
+    "retrieval-augmented-generation",
+    "ai-safety",
+    "prompt-injection",
     "wyrlo"
   ],
   "type": "module",

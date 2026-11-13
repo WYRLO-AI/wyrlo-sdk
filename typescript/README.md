@@ -1,58 +1,59 @@
 # @wyrlo/sdk
 
-SDK TypeScript de [WYRLO](https://www.wyrlo.io) : votre RAG dit « je ne sais pas »
-plutôt qu'une réponse fausse.
+TypeScript SDK for [WYRLO](https://www.wyrlo.io): your RAG says "I don't know" instead of
+a wrong answer. WYRLO checks each LLM answer against the passages it was given, returns a
+decision and a confidence level, and tells you which passages to cite.
+
+[Version française](https://github.com/WYRLO-AI/wyrlo-sdk/blob/main/typescript/README.fr.md)
 
 ```bash
 npm install @wyrlo/sdk
 ```
 
-Documentation : https://www.wyrlo.io/docs. L'accès à l'API se fait sur demande pour
-l'instant : https://www.wyrlo.io/fr/demander-un-acces.
+Documentation: https://www.wyrlo.io/docs. API access is currently on request:
+https://www.wyrlo.io/fr/demander-un-acces.
 
-Node 18+, Deno, Bun. **Côté serveur uniquement** : la clé ne doit jamais atteindre un
-navigateur.
+Node 18+, Deno, Bun. **Server-side only**: the key must never reach a browser.
 
-## Utilisation
+## Usage
 
 ```ts
 import { Wyrlo } from "@wyrlo/sdk";
 
-const wyrlo = new Wyrlo(); // lit WYRLO_API_KEY
+const wyrlo = new Wyrlo(); // reads WYRLO_API_KEY
 
 const res = await wyrlo.guard({
   question,
   passages: docs.map((d) => ({ id: d.id, text: d.text, source: d.file })),
-  answer, // la réponse produite par votre LLM
+  answer, // the answer produced by your LLM
 });
 
 if (res.decision === "abstain") {
-  return "Je ne sais pas. " + res.reason;
+  return "I don't know. " + res.reason;
 }
-return res.answer; // citez res.passages.filter((p) => p.kept)
+return res.answer; // cite res.passages.filter((p) => p.kept)
 ```
 
-Recommandé : préparez la recherche avec le vocabulaire de vos réglages, et passez le
-même `requestId` à `guard` :
+Recommended: prepare the search with your settings' vocabulary, and pass the same
+`requestId` to `guard`:
 
 ```ts
 const prepared = await wyrlo.prepare({ question });
-const docs = await search(prepared.query); // votre recherche
+const docs = await search(prepared.query); // your search
 const res = await wyrlo.guard({ question, passages, answer, requestId: prepared.request_id });
 ```
 
-`prepare` ne lève pas d'exception en cas de panne : il renvoie la question d'origine
+`prepare` does not throw on outages: it returns the original question
 (`degraded: true`).
 
-Si votre interface propose un pouce (en haut / en bas), transmettez-le avec le
-`trace_id` de la réponse. Aucun texte n'est envoyé ; WYRLO s'en sert pour juger ses
-corrections sans appel payant :
+If your interface offers a thumbs up / down, send it with the answer's `trace_id`. No text
+is sent; WYRLO uses it to judge its corrections without a paid call:
 
 ```ts
 await wyrlo.feedback({ traceId: res.trace_id, helpful: true });
 ```
 
-Ou laissez le SDK appeler votre LLM :
+Or let the SDK call your LLM:
 
 ```ts
 const res = await wyrlo.guard({
@@ -62,177 +63,173 @@ const res = await wyrlo.guard({
 });
 ```
 
-## Ce que renvoie `guard`
+## What `guard` returns
 
-| Champ                   | Sens                                                                                                                 |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `decision`              | `answer` ou `abstain` (« je ne sais pas »)                                                                           |
-| `confidence`            | `certain`, `probable`, `uncertain`, `unverified` (réponse transmise sans aucun contrôle)                             |
-| `confidence_score`      | Score de cohérence de la réponse (anglais), ou score des signaux (autres langues) ; null si rien n'a pu être vérifié |
-| `passages[].kept`       | Passages à citer ; `injection: true` = écarté                                                                        |
-| `unsupported_sentences` | Phrases de la réponse qu'aucun passage n'appuie                                                                      |
-| `skipped_steps`         | Traitements sautés côté WYRLO (serveur lent ou indisponible)                                                         |
-| `language`              | Langue retenue (précisée ou devinée), null si inconnue                                                               |
-| `rerank_method`         | `similarity` (passages réordonnés par similarité), `none` (ordre de votre recherche) ; la similarité reste un signal |
-| `verification_method`   | `answer` (anglais) ; `sentences` ; `signals` (autres langues) ; `model` (français, modèle de langue) ; `none`        |
-| `degraded`              | Mode dégradé : traitement sauté, WYRLO injoignable ou plafond atteint ; toujours vrai si `unverified`                |
-| `quota_exceeded`        | Vrai si le plafond mensuel de l'offre gratuite est atteint (2 000 questions analysées)                               |
-| `settings_variant`      | Pendant un test partiel des réglages : `control` ou `candidate` ; null sinon                                         |
-| `trace_id`              | Identifiant de la trace dans votre espace WYRLO (null si la question n'a pas été analysée)                           |
+| Field                   | Meaning                                                                                                                    |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `decision`              | `answer` or `abstain` ("I don't know")                                                                                     |
+| `confidence`            | `certain`, `probable`, `uncertain`, `unverified` (answer passed through without any check)                                 |
+| `confidence_score`      | Consistency score of the answer (English), or score of the signals (other languages); null if nothing could be verified    |
+| `reason`                | Short explanation (currently in French)                                                                                    |
+| `passages[].kept`       | Passages to cite; `injection: true` = set aside                                                                            |
+| `unsupported_sentences` | Sentences of the answer that no passage supports                                                                           |
+| `skipped_steps`         | Processing steps skipped on the WYRLO side (slow or unavailable server)                                                    |
+| `language`              | Language used (given or detected), null if unknown                                                                         |
+| `rerank_method`         | `similarity` (passages reordered by similarity), `none` (your search order); similarity remains a signal                   |
+| `verification_method`   | `answer` (English); `sentences`; `signals` (other languages); `model` (French, language model); `none`                     |
+| `degraded`              | Degraded mode: step skipped, WYRLO unreachable or cap reached; always true if `unverified`                                 |
+| `quota_exceeded`        | True if the monthly cap of the free tier is reached (2,000 analysed questions)                                             |
+| `settings_variant`      | During a partial test of the settings: `control` or `candidate`; null otherwise                                            |
+| `trace_id`              | Identifier of the trace in your WYRLO space (null if the question was not analysed)                                        |
 
-## Pannes : jamais bloquant
+## Outages: never blocking
 
-Panne réseau, délai dépassé (3 s au total par défaut, nouvelle tentative comprise) ou
-erreur 5xx : le SDK réessaie une fois avec le même `request_id` (la question n'est comptée qu'une fois),
-puis renvoie un résultat **dégradé** : `decision: "answer"`, `confidence: "unverified"`,
-`degraded: true`. Votre utilisateur a toujours une réponse.
+Network failure, timeout (3 s in total by default, retry included) or 5xx error: the SDK
+retries once with the same `request_id` (the question is counted only once), then returns
+a **degraded** result: `decision: "answer"`, `confidence: "unverified"`, `degraded: true`.
+Your user always gets an answer.
 
-Plafond mensuel de l'offre gratuite atteint (2 000 questions analysées par mois) : même
-résultat dégradé, avec `quota_exceeded: true`, jusqu'au mois suivant.
+Monthly cap of the free tier reached (2,000 analysed questions per month): same degraded
+result, with `quota_exceeded: true`, until the next month.
 
-Une erreur de votre intégration (clé absente ou révoquée, requête invalide) lève une
-`WyrloError` (`status`, `code`, `details`), pour être vue dès le développement.
+An error in your integration (missing or revoked key, invalid request) throws a
+`WyrloError` (`status`, `code`, `details`), so you see it during development.
 
 ## Options
 
 ```ts
 new Wyrlo({
-  apiKey: "wyr_live_…", // par défaut WYRLO_API_KEY
-  baseUrl: "…", // par défaut WYRLO_BASE_URL, sinon DEFAULT_BASE_URL
-  region: "eu-west-3", // par défaut WYRLO_REGION, sinon eu-west-3 (Paris)
-  timeoutMs: 3000, // au total, nouvelle tentative comprise
+  apiKey: "wyr_live_…", // default: WYRLO_API_KEY
+  baseUrl: "…", // default: WYRLO_BASE_URL, otherwise DEFAULT_BASE_URL
+  region: "eu-west-3", // default: WYRLO_REGION, otherwise eu-west-3 (Paris)
+  timeoutMs: 3000, // in total, retry included
   maxRetries: 1,
-  mask: false, // true : masquage sur votre serveur avant l'envoi (voir ci-dessous)
+  mask: false, // true: masking on your server before sending (see below)
 });
 ```
 
-## Masquage côté client
+## Client-side masking
 
-WYRLO masque les données personnelles reconnaissables avant tout traitement. Avec
-`mask: true`, ce masquage se fait **sur votre serveur, avant l'envoi** : les valeurs ne
-quittent jamais votre machine, WYRLO ne reçoit que des marques (`[EMAIL_1]`,
-`[TELEPHONE_1]`…).
+WYRLO masks recognisable personal data before any processing. With `mask: true`, this
+masking happens **on your server, before sending**: the values never leave your machine,
+WYRLO only receives markers (`[EMAIL_1]`, `[TELEPHONE_1]`…).
 
 ```ts
 const wyrlo = new Wyrlo({ mask: true });
 const res = await wyrlo.guard({ question, passages, answer });
-// res.answer, res.reason et res.unsupported_sentences contiennent les vraies valeurs.
-// res.local_masking : { method: "rules", counts: { EMAIL: 2, TELEPHONE: 1 } }
+// res.answer, res.reason and res.unsupported_sentences contain the real values.
+// res.local_masking: { method: "rules", counts: { EMAIL: 2, TELEPHONE: 1 } }
 ```
 
-Masqués (règles avec contrôle de validité, les mêmes que celles de WYRLO) : e-mails,
-téléphones (France et international), IBAN (clé vérifiée), cartes bancaires (contrôle de
-Luhn), numéro de sécurité sociale (clé vérifiée ou mot-clé proche), adresses IP, numéros
-de passeport et de carte d'identité (avec un mot-clé), adresses postales (numéro et type
-de voie), clés d'API et jetons reconnaissables. Une même valeur reçoit la même marque
-dans la question, la réponse et les passages : la vérification reste exacte.
+Masked (rules with validity checks, the same as WYRLO's): e-mails, phone numbers (France
+and international), IBANs (checksum verified), bank cards (Luhn check), French social
+security numbers (checksum verified or nearby keyword), IP addresses, passport and identity
+card numbers (with a keyword), postal addresses (number and street type), recognisable API
+keys and tokens. The same value gets the same marker in the question, the answer and the
+passages: verification stays exact.
 
-**Non masqués** : les noms de personnes et d'entreprises, les adresses sans numéro ni type
-de voie (lieu-dit), et tout identifiant sans forme reconnaissable (numéro client interne…). Les dates, montants et numéros de commande
-restent aussi : la vérification doit pouvoir les comparer. Pour aller plus loin, passez
-votre propre fonction, par exemple un modèle de détection des noms qui tourne chez vous :
+**Not masked**: names of people and companies, addresses without a number or street type,
+and any identifier without a recognisable shape (internal customer number…). Dates,
+amounts and order numbers stay too: verification must be able to compare them. To go
+further, pass your own function, for example a name-detection model running on your side:
 
 ```ts
 const wyrlo = new Wyrlo({
-  // Reçoit tous les textes d'un appel, rend autant de textes masqués.
-  mask: async (texts) => texts.map((t) => monMasquage(t)),
+  // Receives all the texts of a call, returns as many masked texts.
+  mask: async (texts) => texts.map((t) => myMasking(t)),
 });
 ```
 
-Si le masquage échoue (exception, nombre de textes différent), **rien n'est envoyé** :
-la réponse passe sans vérification (`degraded: true`, étape `anonymize` dans
-`skipped_steps`). Les fonctions `maskTexts` et `unmaskText` sont aussi exportées.
+If masking fails (exception, different number of texts), **nothing is sent**: the answer
+passes without verification (`degraded: true`, step `anonymize` in `skipped_steps`). The
+`maskTexts` and `unmaskText` functions are also exported.
 
-## Index sans copie (mode B)
+## No-copy index (mode B)
 
-Ouvert sur demande, projet par projet. WYRLO découpe vos documents, masque les données
-personnelles, calcule les vecteurs (Mistral AI, point d'accès européen), puis oublie le
-texte : seuls l'adresse, l'empreinte et le vecteur de chaque passage sont gardés.
+Open on request, project by project. WYRLO splits your documents, masks personal data,
+computes the vectors (Mistral AI, European endpoint), then forgets the text: only the
+address, fingerprint and vector of each passage are kept.
 
 ```ts
-await wyrlo.index("docs/cgv.md", {
+await wyrlo.index("docs/terms.md", {
   version: "2026-11-07",
-  title: "Conditions générales de vente", // recommandé : meilleure recherche, jamais conservé
-  text: contenu,
-  labels: ["cgv"],
+  title: "Terms of sale", // recommended: better search, never stored
+  text: content,
+  labels: ["terms"],
 });
-// Beaucoup de documents : 100 par appel, un résultat par document.
-const lot = await wyrlo.indexMany(
-  fichiers.map((f) => ({ id: f.chemin, version: f.version, title: f.titre, text: f.texte })),
+// Many documents: 100 per call, one result per document.
+const batch = await wyrlo.indexMany(
+  files.map((f) => ({ id: f.path, version: f.version, title: f.title, text: f.text })),
 );
 
-// 8 passages (environ 600 caractères chacun) : assez de contexte pour la réponse.
+// 8 passages (about 600 characters each): enough context for the answer.
 const { results, degraded } = await wyrlo.search({ question, k: 8 });
-// Relisez le texte chez vous, puis vérifiez la réponse avec l'adresse de chaque passage :
+// Read the text on your side, then verify the answer with each passage's address:
 const passages = results.map(({ document, version, start, length, fingerprint }) => ({
   id: `${document}#${start}`,
-  text: lireChezVous(document).slice(start, start + length),
+  text: readOnYourSide(document).slice(start, start + length),
   address: { document, version, start, length, fingerprint },
 }));
 const res = await wyrlo.guard({ question, passages, generate });
-// Un passage modifié depuis son indexation revient avec `stale: true` : c'est un signal,
-// il ne change pas la décision. Relisez le document à jour et réindexez-le.
+// A passage modified since it was indexed comes back with `stale: true`: it is a signal,
+// it does not change the decision. Read the updated document and index it again.
 
-await wyrlo.remove("docs/cgv.md"); // toujours possible, même mode B coupé
-await wyrlo.indexStats(); // chiffres seulement, aucun identifiant
+await wyrlo.remove("docs/terms.md"); // always possible, even with mode B turned off
+await wyrlo.indexStats(); // figures only, no identifier
 ```
 
-- `search` ne lève jamais d'exception pour une panne : liste vide, `degraded: true`, à
-  compléter par votre propre recherche. `keywordHits` fusionne vos résultats par mots-clés.
-- `index`, `remove` et `indexStats` lèvent une `WyrloError` pour toute erreur, panne
-  comprise (`unavailable`) : refaire l'appel est sans risque (même `version` : « unchanged »).
-- Mode B coupé : `WyrloError` 403 `index_disabled`.
-- Avec l'option `mask`, `index` refuse d'envoyer le texte (`mask_unsupported`), car
-  positions et empreintes doivent porter sur votre texte d'origine ; passez
-  `allowUnmasked: true` pour l'envoyer quand même. Dans `guard`, un passage dont le
-  masquage change le texte part sans son adresse (il ne serait jamais reconnu).
-- `indexMany` : jusqu'à 100 documents en un appel (corps de 512 Kio au plus), dans le même
-  espace, avec un résultat par document (`indexed`, `unchanged` ou `failed`). Un document
-  refusé n'empêche pas les autres ; avec le code `overloaded`, renvoyez-le plus tard.
-- `title` (facultatif, 300 caractères au plus) : titre du document, placé en tête de chaque
-  passage pour le calcul des vecteurs, jamais conservé. Envoyez-le quand le document en a
-  un : mesuré sur 283 questions jamais vues, le bon passage arrive dans les 5 premiers pour
-  85,2 % des questions avec le titre, contre 79,9 % sans. Changez la `version` si le titre
-  change.
-- Limites : 5 000 documents et 100 000 passages par projet ; 2 000 passages et
-  400 000 caractères par document.
+- `search` never throws on an outage: empty list, `degraded: true`, to be completed by
+  your own search. `keywordHits` merges your keyword results.
+- `index`, `remove` and `indexStats` throw a `WyrloError` for any error, outages included
+  (`unavailable`): retrying is safe (same `version`: "unchanged").
+- Mode B turned off: `WyrloError` 403 `index_disabled`.
+- With the `mask` option, `index` refuses to send the text (`mask_unsupported`), because
+  positions and fingerprints must refer to your original text; pass
+  `allowUnmasked: true` to send it anyway. In `guard`, a passage whose text is changed by
+  masking is sent without its address (it would never be recognised).
+- `indexMany`: up to 100 documents in one call (body of 512 KiB at most), in the same
+  space, with one result per document (`indexed`, `unchanged` or `failed`). A rejected
+  document does not block the others; with the code `overloaded`, send it again later.
+- `title` (optional, 300 characters at most): title of the document, put at the head of
+  each passage to compute the vectors, never stored. Send it when the document has one:
+  measured on 283 unseen questions, the right passage is in the top 5 for 85.2% of
+  questions with the title, against 79.9% without. Change the `version` if the title
+  changes.
+- Limits: 5,000 documents and 100,000 passages per project; 2,000 passages and 400,000
+  characters per document.
 
-### Un espace par client final (mode C, plateformes)
+### One space per end customer (mode C, platforms)
 
-Si vous offrez un assistant à vos propres clients, rangez les documents de chacun dans
-son espace, avec un identifiant opaque de votre choix (jamais un nom ni une adresse
-e-mail ; lettres, chiffres, « . _ : - », 100 caractères au plus). Chaque recherche ne voit
-qu'un seul espace, filtré par la base de WYRLO :
+If you offer an assistant to your own customers, store each customer's documents in their
+own space, with an opaque identifier of your choice (never a name or an e-mail address;
+letters, digits, ". _ : -", 100 characters at most). Each search only sees one space,
+filtered by WYRLO's database:
 
 ```ts
-await wyrlo.index("cgv.md", { version: "v3", text: contenu, tenant: "client-42" });
-await wyrlo.search({ question, tenant: "client-42" }); // jamais les documents d'un autre
-await wyrlo.remove("cgv.md", { tenant: "client-42" });
+await wyrlo.index("terms.md", { version: "v3", text: content, tenant: "client-42" });
+await wyrlo.search({ question, tenant: "client-42" }); // never another customer's documents
+await wyrlo.remove("terms.md", { tenant: "client-42" });
 await wyrlo.indexStats({ tenant: "client-42" });
-await wyrlo.removeTenant("client-42"); // tout l'espace, tout de suite (fin de contrat)
+await wyrlo.removeTenant("client-42"); // the whole space, right away (end of contract)
 ```
 
-Sans `tenant`, tout se passe dans l'espace par défaut du projet. Les limites restent
-celles du projet.
+Without `tenant`, everything happens in the project's default space. The limits remain
+those of the project.
 
-## Adresse de l'API
+## API address
 
-Par défaut, le SDK appelle `DEFAULT_BASE_URL` (exporté par le paquet) :
-`https://api.wyrlo.io/functions/v1` (point d'entrée `/guard`).
-Pour en changer : l'option `baseUrl`, sinon la variable d'environnement
-`WYRLO_BASE_URL` ; une valeur vide retombe sur l'adresse par défaut et les barres
-obliques finales sont retirées.
+By default, the SDK calls `DEFAULT_BASE_URL` (exported by the package):
+`https://api.wyrlo.io/functions/v1` (endpoint `/guard`). To change it: the `baseUrl`
+option, otherwise the `WYRLO_BASE_URL` environment variable; an empty value falls back to
+the default address and trailing slashes are removed. Calls go directly from your server
+to the API, without a relay.
 
-Avant le lancement, `https://api.wyrlo.io/functions/v1` deviendra l'adresse par
-défaut ; l'adresse actuelle continuera de fonctionner. Les appels vont directement de
-votre serveur à l'API, sans relais.
+## Processing region
 
-## Région de traitement
+Each call sends the `x-region: eu-west-3` header. Without it, Supabase would run the
+function in the region closest to your server (for example `us-east-1`), while the
+question, passages and answer arrive there in clear, before masking. With it, processing
+stays in Paris; the `x-sb-edge-region` response header confirms it. An empty value for
+`region` or `WYRLO_REGION` falls back to `eu-west-3`.
 
-Chaque appel envoie l'en-tête `x-region: eu-west-3`. Sans lui, Supabase exécuterait la
-fonction dans la région la plus proche de votre serveur (par exemple `us-east-1`), alors
-que la question, les passages et la réponse y arrivent en clair, avant masquage. Avec
-lui, le traitement reste à Paris ; l'en-tête de réponse `x-sb-edge-region` le confirme.
-Une valeur vide pour `region` ou `WYRLO_REGION` retombe sur `eu-west-3`.
-
-Référence de l'API : https://www.wyrlo.io/docs.
+API reference: https://www.wyrlo.io/docs.
