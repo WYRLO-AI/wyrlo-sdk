@@ -33,14 +33,14 @@ try:
     from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 except ImportError as error:  # pragma: no cover - message d'installation
     raise ImportError(
-        'L\'intégration LlamaIndex demande llama-index-core : pip install "wyrlo[llamaindex]"'
+        'The LlamaIndex integration needs llama-index-core: pip install "wyrlo[llamaindex]"'
     ) from error
 
 __all__ = ["DEFAULT_PROMPT", "GuardedQueryEngine", "WyrloRetriever", "passages_from_nodes"]
 
 DEFAULT_PROMPT = (
-    "Réponds uniquement à partir des passages ci-dessous. Si la réponse n'y figure pas, "
-    "dis que tu ne sais pas.\n\nPassages :\n{context}\n\nQuestion : {question}\nRéponse :"
+    "Answer only from the passages below. If the answer is not there, say that you don't "
+    "know.\n\nPassages:\n{context}\n\nQuestion: {question}\nAnswer:"
 )
 
 

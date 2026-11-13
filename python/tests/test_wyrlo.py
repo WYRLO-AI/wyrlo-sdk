@@ -207,7 +207,7 @@ class GuardTests(unittest.TestCase):
         res = self.client().guard(question="Q ?", passages=[], answer="R.")
         self.assertEqual(len(self.api.calls), 1)
         self.assertTrue(res.degraded)
-        self.assertIn("surchargé", res.reason)
+        self.assertIn("overloaded", res.reason)
 
     def test_delai_total_par_defaut_de_3_s_nouvel_essai_compris(self):
         self.api.responses = [(200, OK, 4.0)]
@@ -279,6 +279,17 @@ class GuardTests(unittest.TestCase):
         self.assertEqual(region_of(region="eu-central-1"), "eu-central-1")
         os.environ["WYRLO_REGION"] = "  "
         self.assertEqual(region_of(), "eu-west-3")
+
+    def test_option_locale_en_tete_accept_language_absent_par_defaut(self):
+        self.api.responses = [(200, OK, 0)]
+
+        def language_of(**kwargs):
+            self.client(**kwargs).guard(question="Q ?", passages=[], answer="R.")
+            return self.api.calls[-1]["headers"].get("Accept-Language")
+
+        # Sans option, aucun en-tête : l'API répond en anglais.
+        self.assertIsNone(language_of())
+        self.assertEqual(language_of(locale="fr"), "fr")
 
 
 class PrepareTests(unittest.TestCase):
@@ -545,7 +556,7 @@ class MasquageTests(unittest.TestCase):
             self.assertEqual((res.decision, res.confidence), ("answer", "unverified"))
             self.assertIn("anonymize", res.skipped_steps)
             self.assertEqual(res.answer, self.ANSWER)
-            self.assertIn("Masquage local en échec", res.reason)
+            self.assertIn("Local masking failed", res.reason)
 
     def test_prepare_question_masquee_vraie_question_rendue(self):
         self.api.responses = [

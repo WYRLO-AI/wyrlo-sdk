@@ -97,7 +97,8 @@ Une clé absente ou refusée, ou une requête invalide, lève `WyrloError`
 ## Options
 
 ```python
-Wyrlo(api_key="wyr_live_…", base_url=None, timeout=3.0, max_retries=1, region=None, mask=None)
+Wyrlo(api_key="wyr_live_…", base_url=None, timeout=3.0, max_retries=1, region=None,
+      mask=None, locale=None)
 ```
 
 `base_url` : par défaut `WYRLO_BASE_URL`, sinon `DEFAULT_BASE_URL` (exporté par le
@@ -110,6 +111,9 @@ retombe aussi sur Paris). Chaque appel envoie l'en-tête `X-Region` : sans lui, 
 exécuterait la fonction dans la région la plus proche de votre serveur (par exemple
 `us-east-1`), alors que la question, les passages et la réponse y arrivent en clair,
 avant masquage. L'en-tête de réponse `x-sb-edge-region` confirme la région de traitement.
+
+`locale` : langue de `reason` et des messages d'erreur de l'API. Anglais par défaut ;
+`"fr"` pour le français (envoyé dans l'en-tête `Accept-Language`).
 
 ## Masquage côté client
 

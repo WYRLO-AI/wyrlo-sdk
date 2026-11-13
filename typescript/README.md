@@ -70,7 +70,7 @@ const res = await wyrlo.guard({
 | `decision`              | `answer` or `abstain` ("I don't know")                                                                                  |
 | `confidence`            | `certain`, `probable`, `uncertain`, `unverified` (answer passed through without any check)                              |
 | `confidence_score`      | Consistency score of the answer (English), or score of the signals (other languages); null if nothing could be verified |
-| `reason`                | Short explanation (currently in French)                                                                                 |
+| `reason`                | Short explanation, in English (option `locale: "fr"` for French)                                                        |
 | `passages[].kept`       | Passages to cite; `injection: true` = set aside                                                                         |
 | `unsupported_sentences` | Sentences of the answer that no passage supports                                                                        |
 | `skipped_steps`         | Processing steps skipped on the WYRLO side (slow or unavailable server)                                                 |
@@ -105,6 +105,7 @@ new Wyrlo({
   timeoutMs: 3000, // in total, retry included
   maxRetries: 1,
   mask: false, // true: masking on your server before sending (see below)
+  locale: "en", // language of reason and API errors: "en" (default) or "fr"
 });
 ```
 

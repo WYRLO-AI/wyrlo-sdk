@@ -35,7 +35,7 @@ try:
     from langchain_core.runnables import Runnable, RunnableLambda
 except ImportError as error:  # pragma: no cover - message d'installation
     raise ImportError(
-        'L\'intégration LangChain demande langchain-core : pip install "wyrlo[langchain]"'
+        'The LangChain integration needs langchain-core: pip install "wyrlo[langchain]"'
     ) from error
 
 __all__ = ["WyrloRetriever", "guarded_chain", "passages_from_documents"]

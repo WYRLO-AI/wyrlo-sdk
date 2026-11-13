@@ -116,7 +116,7 @@ export interface GuardResponse {
    * rien n'a pu être vérifié.
    */
   confidence_score: number | null;
-  /** Explication courte, en français. */
+  /** Explication courte : en anglais par défaut, en français avec Accept-Language: fr. */
   reason: string;
   passages: GuardPassageResult[];
   /** Phrases de la réponse qu'aucun passage n'appuie (vérification phrase par phrase). */
