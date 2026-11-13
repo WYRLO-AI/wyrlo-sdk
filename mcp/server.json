@@ -1,0 +1,53 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.WYRLO-AI/wyrlo",
+  "title": "WYRLO",
+  "description": "Verify agent answers against their sources; say \"I don't know\" instead of guessing.",
+  "version": "0.1.0",
+  "websiteUrl": "https://www.wyrlo.io/docs",
+  "repository": {
+    "url": "https://github.com/WYRLO-AI/wyrlo-sdk",
+    "source": "github",
+    "subfolder": "mcp"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@wyrlo/mcp",
+      "version": "0.1.0",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "WYRLO_API_KEY",
+          "description": "Your WYRLO API key (wyr_live_…).",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "WYRLO_REGION",
+          "description": "Processing region. Default: eu-west-3 (Paris).",
+          "isRequired": false
+        },
+        {
+          "name": "WYRLO_TENANT",
+          "description": "End-customer space in the no-copy index (platforms). Optional.",
+          "isRequired": false
+        }
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://api.wyrlo.io/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer followed by your WYRLO API key: Bearer wyr_live_…",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}

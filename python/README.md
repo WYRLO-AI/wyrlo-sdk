@@ -1,95 +1,97 @@
 # wyrlo
 
-SDK Python de [WYRLO](https://www.wyrlo.io) : votre RAG dit « je ne sais pas » plutôt
-qu'une réponse fausse. Python 3.9+, aucune dépendance. **Côté serveur uniquement.**
+Python SDK for [WYRLO](https://www.wyrlo.io): your RAG says "I don't know" instead of a
+wrong answer. Python 3.9+, no dependencies. **Server-side only.**
+
+[Version française](https://github.com/WYRLO-AI/wyrlo-sdk/blob/main/python/README.fr.md)
 
 ```bash
-pip install wyrlo                      # SDK seul
-pip install "wyrlo[langchain]"         # avec LangChain
-pip install "wyrlo[llamaindex]"        # avec LlamaIndex
+pip install wyrlo                      # SDK only
+pip install "wyrlo[langchain]"         # with LangChain
+pip install "wyrlo[llamaindex]"        # with LlamaIndex
 ```
 
-Documentation : https://www.wyrlo.io/docs. L'accès à l'API se fait sur demande pour
-l'instant : https://www.wyrlo.io/fr/demander-un-acces.
+Documentation: https://www.wyrlo.io/docs. API access is currently on request:
+https://www.wyrlo.io/fr/demander-un-acces.
 
-## Utilisation
+## Usage
 
 ```python
 from wyrlo import Wyrlo
 
-wyrlo = Wyrlo()  # lit WYRLO_API_KEY
+wyrlo = Wyrlo()  # reads WYRLO_API_KEY
 
 res = wyrlo.guard(
     question=question,
     passages=[{"id": d.id, "text": d.text, "source": d.file} for d in docs],
-    answer=answer,  # la réponse produite par votre LLM
+    answer=answer,  # the answer produced by your LLM
 )
 
 if not res.should_answer:
-    return "Je ne sais pas. " + res.reason
-return res.answer  # citez res.kept_passages
+    return "I don't know. " + res.reason
+return res.answer  # cite res.kept_passages
 ```
 
-Recommandé : préparez la recherche avec le vocabulaire de vos réglages, et passez le
-même identifiant de requête à `guard` :
+`res.reason` is a short explanation, currently in French.
+
+Recommended: prepare the search with your settings' vocabulary, and pass the same request
+identifier to `guard`:
 
 ```python
 prepared = wyrlo.prepare(question)
-docs = search(prepared.query)  # votre recherche
+docs = search(prepared.query)  # your search
 res = wyrlo.guard(question=question, passages=..., answer=answer,
                   request_id=prepared.request_id)
 ```
 
-`prepare` ne lève pas d'exception en cas de panne : il renvoie la question d'origine
-(`degraded=True`). Pendant un test partiel des réglages, `res.settings_variant` vaut
-`"control"` ou `"candidate"`.
+`prepare` does not raise on outages: it returns the original question
+(`degraded=True`). During a partial test of the settings, `res.settings_variant` is
+`"control"` or `"candidate"`.
 
-Si votre interface propose un pouce (en haut / en bas), transmettez-le avec le
-`trace_id` de la réponse (aucun texte envoyé) : `wyrlo.feedback(res.trace_id, helpful=True)`.
+If your interface offers a thumbs up / down, send it with the answer's `trace_id` (no text
+sent): `wyrlo.feedback(res.trace_id, helpful=True)`.
 
-Ou laissez le SDK appeler votre LLM : `generate=lambda passages: llm(question, passages)`.
-Les passages peuvent aussi être de simples chaînes.
+Or let the SDK call your LLM: `generate=lambda passages: llm(question, passages)`.
+Passages can also be plain strings.
 
-## LangChain et LlamaIndex
+## LangChain and LlamaIndex
 
-Deux petites intégrations, testées avec les vraies bibliothèques (versions de
-`requirements-integrations.txt`). Elles appellent votre retriever et votre LLM, puis
-`guard` ; le résultat est le même `GuardResult`, et une panne de WYRLO ne lève jamais
-d'exception.
+Two small integrations, tested with the real libraries (versions in
+`requirements-integrations.txt`). They call your retriever and your LLM, then `guard`; the
+result is the same `GuardResult`, and a WYRLO outage never raises.
 
 ```bash
-pip install "wyrlo[langchain]"     # ajoute langchain-core
-pip install "wyrlo[llamaindex]"    # ajoute llama-index-core
+pip install "wyrlo[langchain]"     # adds langchain-core
+pip install "wyrlo[llamaindex]"    # adds llama-index-core
 ```
 
 ```python
 from wyrlo.langchain import guarded_chain
 
-rag = guarded_chain(retriever, prompt | llm)   # prompt : {question} et {context}
-res = rag.invoke("Quel est le délai de rétractation ?")
+rag = guarded_chain(retriever, prompt | llm)   # prompt: {question} and {context}
+res = rag.invoke("What is the withdrawal period?")
 ```
 
 ```python
 from wyrlo.llamaindex import GuardedQueryEngine
 
 engine = GuardedQueryEngine(index.as_retriever(similarity_top_k=5), llm)
-res = engine.query("Quel est le délai de rétractation ?")
+res = engine.query("What is the withdrawal period?")
 ```
 
-Passages envoyés : identifiant (`Document.id` ou `node_id`), texte, source
-(`metadata["source"]`, ou `file_name` pour LlamaIndex) et score s'il existe.
+Passages sent: identifier (`Document.id` or `node_id`), text, source
+(`metadata["source"]`, or `file_name` for LlamaIndex) and score if any.
 
-## Pannes : jamais bloquant
+## Outages: never blocking
 
-Panne réseau, délai dépassé (3 s au total par défaut, nouvelle tentative comprise) ou erreur 5xx :
-une nouvelle tentative
-avec le même `request_id` (la question n'est comptée qu'une fois), puis un résultat
-**dégradé** : `decision="answer"`, `confidence="unverified"`, `degraded=True`.
+Network failure, timeout (3 s in total by default, retry included) or 5xx error: one retry
+with the same `request_id` (the question is counted only once), then a **degraded**
+result: `decision="answer"`, `confidence="unverified"`, `degraded=True`.
 
-Plafond mensuel de l'offre gratuite atteint (2 000 questions analysées par mois) : même
-résultat dégradé, avec `quota_exceeded=True`, jusqu'au mois suivant.
+Monthly cap of the free tier reached (2,000 analysed questions per month): same degraded
+result, with `quota_exceeded=True`, until the next month.
 
-Une clé absente ou refusée, ou une requête invalide, lève `WyrloError`
+A missing or refused key, or an invalid request, raises `WyrloError`
 (`status`, `code`, `details`).
 
 ## Options
@@ -98,144 +100,141 @@ Une clé absente ou refusée, ou une requête invalide, lève `WyrloError`
 Wyrlo(api_key="wyr_live_…", base_url=None, timeout=3.0, max_retries=1, region=None, mask=None)
 ```
 
-`base_url` : par défaut `WYRLO_BASE_URL`, sinon `DEFAULT_BASE_URL` (exporté par le
-paquet) : `https://api.wyrlo.io/functions/v1` (point d'entrée `/guard`) ; la valeur
-n'est écrite qu'à cet endroit du code. Une valeur vide retombe sur l'adresse par
-défaut ; les barres obliques finales sont retirées.
+`base_url`: default `WYRLO_BASE_URL`, otherwise `DEFAULT_BASE_URL` (exported by the
+package): `https://api.wyrlo.io/functions/v1` (endpoint `/guard`). An empty value falls
+back to the default address; trailing slashes are removed.
 
-`region` : par défaut `WYRLO_REGION`, sinon `eu-west-3` (Paris ; une valeur vide
-retombe aussi sur Paris). Chaque appel envoie l'en-tête `X-Region` : sans lui, Supabase
-exécuterait la fonction dans la région la plus proche de votre serveur (par exemple
-`us-east-1`), alors que la question, les passages et la réponse y arrivent en clair,
-avant masquage. L'en-tête de réponse `x-sb-edge-region` confirme la région de traitement.
+`region`: default `WYRLO_REGION`, otherwise `eu-west-3` (Paris; an empty value also falls
+back to Paris). Each call sends the `X-Region` header: without it, Supabase would run the
+function in the region closest to your server (for example `us-east-1`), while the
+question, passages and answer arrive there in clear, before masking. The
+`x-sb-edge-region` response header confirms the processing region.
 
-## Masquage côté client
+## Client-side masking
 
-WYRLO masque les données personnelles reconnaissables avant tout traitement. Avec
-`mask=True`, ce masquage se fait **sur votre serveur, avant l'envoi** : les valeurs ne
-quittent jamais votre machine, WYRLO ne reçoit que des marques (`[EMAIL_1]`,
-`[TELEPHONE_1]`…).
+WYRLO masks recognisable personal data before any processing. With `mask=True`, this
+masking happens **on your server, before sending**: the values never leave your machine,
+WYRLO only receives markers (`[EMAIL_1]`, `[TELEPHONE_1]`…).
 
 ```python
 wyrlo = Wyrlo(mask=True)
 res = wyrlo.guard(question=question, passages=passages, answer=answer)
-# res.answer, res.reason et res.unsupported_sentences contiennent les vraies valeurs.
-# res.local_masking : LocalMasking(method="rules", counts={"EMAIL": 2, "TELEPHONE": 1})
+# res.answer, res.reason and res.unsupported_sentences contain the real values.
+# res.local_masking: LocalMasking(method="rules", counts={"EMAIL": 2, "TELEPHONE": 1})
 ```
 
-Masqués (règles avec contrôle de validité, les mêmes que celles de WYRLO, bibliothèque
-standard seulement) : e-mails, téléphones (France et international), IBAN (clé vérifiée),
-cartes bancaires (contrôle de Luhn), numéro de sécurité sociale (clé vérifiée ou mot-clé
-proche), adresses IP, numéros de passeport et de carte d'identité (avec un mot-clé),
-adresses postales (numéro et type de voie), clés d'API et jetons reconnaissables. Une
-même valeur reçoit la même marque dans la question, la réponse et les passages.
+Masked (rules with validity checks, the same as WYRLO's, standard library only):
+e-mails, phone numbers (France and international), IBANs (checksum verified), bank cards
+(Luhn check), French social security numbers (checksum verified or nearby keyword), IP
+addresses, passport and identity card numbers (with a keyword), postal addresses (number
+and street type), recognisable API keys and tokens. The same value gets the same marker in
+the question, the answer and the passages.
 
-**Non masqués** : les noms de personnes et d'entreprises, les adresses sans numéro ni type
-de voie (lieu-dit), et tout identifiant sans forme reconnaissable. Les dates, montants et numéros de commande restent aussi : la
-vérification doit pouvoir les comparer. Pour les noms, passez votre propre fonction, par
-exemple Presidio installé sur votre machine (rien n'en sort) :
+**Not masked**: names of people and companies, addresses without a number or street type,
+and any identifier without a recognisable shape. Dates, amounts and order numbers stay
+too: verification must be able to compare them. For names, pass your own function, for
+example Presidio installed on your machine (nothing leaves it):
 
 ```python
 from presidio_analyzer import AnalyzerEngine
 from presidio_anonymizer import AnonymizerEngine
 
-analyseur, anonymiseur = AnalyzerEngine(), AnonymizerEngine()
+analyzer, anonymizer = AnalyzerEngine(), AnonymizerEngine()
 
-def masque(textes):
-    # Reçoit tous les textes d'un appel, rend autant de textes masqués.
+def mask(texts):
+    # Receives all the texts of a call, returns as many masked texts.
     return [
-        anonymiseur.anonymize(text=t, analyzer_results=analyseur.analyze(text=t, language="en")).text
-        for t in textes
+        anonymizer.anonymize(text=t, analyzer_results=analyzer.analyze(text=t, language="en")).text
+        for t in texts
     ]
 
-wyrlo = Wyrlo(mask=masque)
+wyrlo = Wyrlo(mask=mask)
 ```
 
-Si le masquage échoue (exception, nombre de textes différent), **rien n'est envoyé** :
-la réponse passe sans vérification (`degraded=True`, étape `anonymize` dans
-`skipped_steps`). Les fonctions `mask_texts` et `unmask_text` sont aussi exportées.
+If masking fails (exception, different number of texts), **nothing is sent**: the answer
+passes without verification (`degraded=True`, step `anonymize` in `skipped_steps`). The
+`mask_texts` and `unmask_text` functions are also exported.
 
-## Index sans copie (mode B)
+## No-copy index (mode B)
 
-Ouvert sur demande, projet par projet. WYRLO découpe vos documents, masque les données
-personnelles, calcule les vecteurs (Mistral AI, point d'accès européen), puis oublie le
-texte : seuls l'adresse, l'empreinte et le vecteur de chaque passage sont gardés.
+Open on request, project by project. WYRLO splits your documents, masks personal data,
+computes the vectors (Mistral AI, European endpoint), then forgets the text: only the
+address, fingerprint and vector of each passage are kept.
 
 ```python
 wyrlo.index(
-    "docs/cgv.md",
+    "docs/terms.md",
     "2026-11-07",
-    title="Conditions générales de vente",  # recommandé : meilleure recherche, jamais conservé
-    text=contenu,
-    labels=["cgv"],
+    title="Terms of sale",  # recommended: better search, never stored
+    text=content,
+    labels=["terms"],
 )
-# Beaucoup de documents : 100 par appel, un résultat par document.
-lot = wyrlo.index_many(
-    [{"id": f.chemin, "version": f.version, "title": f.titre, "text": f.texte} for f in fichiers]
+# Many documents: 100 per call, one result per document.
+batch = wyrlo.index_many(
+    [{"id": f.path, "version": f.version, "title": f.title, "text": f.text} for f in files]
 )
 
-# 8 passages (environ 600 caractères chacun) : assez de contexte pour la réponse.
+# 8 passages (about 600 characters each): enough context for the answer.
 res = wyrlo.search(question, k=8)
 passages = [
     {
         "id": f"{r['document']}#{r['start']}",
-        "text": lire_chez_vous(r["document"])[r["start"] : r["start"] + r["length"]],
+        "text": read_on_your_side(r["document"])[r["start"] : r["start"] + r["length"]],
         "address": {k: r[k] for k in ("document", "version", "start", "length", "fingerprint")},
     }
     for r in res.results
 ]
 out = wyrlo.guard(question=question, passages=passages, generate=generate)
-# Un passage modifié depuis son indexation revient avec stale=True : c'est un signal,
-# il ne change pas la décision. Relisez le document à jour et réindexez-le.
+# A passage modified since it was indexed comes back with stale=True: it is a signal,
+# it does not change the decision. Read the updated document and index it again.
 
-wyrlo.remove("docs/cgv.md")  # toujours possible, même mode B coupé
-wyrlo.index_stats()  # chiffres seulement, aucun identifiant
+wyrlo.remove("docs/terms.md")  # always possible, even with mode B turned off
+wyrlo.index_stats()  # figures only, no identifier
 ```
 
-- `search` ne lève jamais d'exception pour une panne : liste vide, `degraded=True`, à
-  compléter par votre propre recherche. `keyword_hits` fusionne vos résultats par mots-clés.
-- `index`, `remove` et `index_stats` lèvent `WyrloError` pour toute erreur, panne comprise
-  (`unavailable`) : refaire l'appel est sans risque (même `version` : « unchanged »).
-- Mode B coupé : `WyrloError` 403 `index_disabled`.
-- Avec l'option `mask`, `index` refuse d'envoyer le texte (`mask_unsupported`), car
-  positions et empreintes doivent porter sur votre texte d'origine ; passez
-  `allow_unmasked=True` pour l'envoyer quand même. Dans `guard`, un passage dont le
-  masquage change le texte part sans son adresse (il ne serait jamais reconnu).
-- `index_many` : jusqu'à 100 documents en un appel (corps de 512 Kio au plus), dans le même
-  espace, avec un résultat par document (`indexed`, `unchanged` ou `failed`). Un document
-  refusé n'empêche pas les autres ; avec le code `overloaded`, renvoyez-le plus tard.
-- `title` (facultatif, 300 caractères au plus) : titre du document, placé en tête de chaque
-  passage pour le calcul des vecteurs, jamais conservé. Envoyez-le quand le document en a
-  un : mesuré sur 283 questions jamais vues, le bon passage arrive dans les 5 premiers pour
-  85,2 % des questions avec le titre, contre 79,9 % sans. Changez la `version` si le titre
-  change.
-- Limites : 5 000 documents et 100 000 passages par projet ; 2 000 passages et
-  400 000 caractères par document.
+- `search` never raises on an outage: empty list, `degraded=True`, to be completed by your
+  own search. `keyword_hits` merges your keyword results.
+- `index`, `remove` and `index_stats` raise `WyrloError` for any error, outages included
+  (`unavailable`): retrying is safe (same `version`: "unchanged").
+- Mode B turned off: `WyrloError` 403 `index_disabled`.
+- With the `mask` option, `index` refuses to send the text (`mask_unsupported`), because
+  positions and fingerprints must refer to your original text; pass
+  `allow_unmasked=True` to send it anyway. In `guard`, a passage whose text is changed by
+  masking is sent without its address (it would never be recognised).
+- `index_many`: up to 100 documents in one call (body of 512 KiB at most), in the same
+  space, with one result per document (`indexed`, `unchanged` or `failed`). A rejected
+  document does not block the others; with the code `overloaded`, send it again later.
+- `title` (optional, 300 characters at most): title of the document, put at the head of
+  each passage to compute the vectors, never stored. Send it when the document has one:
+  measured on 283 unseen questions, the right passage is in the top 5 for 85.2% of
+  questions with the title, against 79.9% without. Change the `version` if the title
+  changes.
+- Limits: 5,000 documents and 100,000 passages per project; 2,000 passages and 400,000
+  characters per document.
 
-### Un espace par client final (mode C, plateformes)
+### One space per end customer (mode C, platforms)
 
-Si vous offrez un assistant à vos propres clients, rangez les documents de chacun dans
-son espace, avec un identifiant opaque de votre choix (jamais un nom ni une adresse
-e-mail ; lettres, chiffres, « . _ : - », 100 caractères au plus). Chaque recherche ne voit
-qu'un seul espace, filtré par la base de WYRLO :
+If you offer an assistant to your own customers, store each customer's documents in their
+own space, with an opaque identifier of your choice (never a name or an e-mail address;
+letters, digits, ". _ : -", 100 characters at most). Each search only sees one space,
+filtered by WYRLO's database:
 
 ```python
-wyrlo.index("cgv.md", "v3", text=contenu, tenant="client-42")
-wyrlo.search(question, tenant="client-42")  # jamais les documents d'un autre
-wyrlo.remove("cgv.md", tenant="client-42")
+wyrlo.index("terms.md", "v3", text=content, tenant="client-42")
+wyrlo.search(question, tenant="client-42")  # never another customer's documents
+wyrlo.remove("terms.md", tenant="client-42")
 wyrlo.index_stats(tenant="client-42")
-wyrlo.remove_tenant("client-42")  # tout l'espace, tout de suite (fin de contrat)
+wyrlo.remove_tenant("client-42")  # the whole space, right away (end of contract)
 ```
 
-Sans `tenant`, tout se passe dans l'espace par défaut du projet. Les limites restent
-celles du projet.
-Les retrievers LangChain et LlamaIndex prennent le même paramètre :
-`WyrloRetriever(client=wyrlo, read=lire, tenant="client-42")`.
+Without `tenant`, everything happens in the project's default space. The limits remain
+those of the project. The LangChain and LlamaIndex retrievers take the same parameter:
+`WyrloRetriever(client=wyrlo, read=read, tenant="client-42")`.
 
-`passages_from_search(res.results, read)` fait la boucle ci-dessus pour vous : `read`
-reçoit `(document, version, start, length)` et rend le texte, ou `None` si le document
-n'existe plus (le résultat est alors écarté). Pour LangChain et LlamaIndex, un retriever
-fait la même chose et garde l'adresse jusqu'à `guard` :
+`passages_from_search(res.results, read)` runs the loop above for you: `read` receives
+`(document, version, start, length)` and returns the text, or `None` if the document no
+longer exists (the result is then dropped). For LangChain and LlamaIndex, a retriever does
+the same and keeps the address until `guard`:
 
 ```python
 from wyrlo.langchain import WyrloRetriever, guarded_chain
@@ -253,5 +252,4 @@ engine = GuardedQueryEngine(WyrloRetriever(wyrlo, read, k=8), llm)
 python3 -m unittest discover -s tests
 ```
 
-Les tests des intégrations sont sautés si les bibliothèques manquent ;
-`scripts/deploy.sh` les lance dans un environnement où elles sont installées.
+The integration tests are skipped if the libraries are missing.

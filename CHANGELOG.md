@@ -1,0 +1,22 @@
+# Changelog
+
+All notable changes to the WYRLO SDKs. Versions follow [Semantic Versioning](https://semver.org).
+
+## Unreleased
+
+- Documentation in English for the three packages; the French versions stay in
+  `README.fr.md`.
+- Runnable examples in `examples/`: TypeScript, Python, LangChain, LlamaIndex, MCP.
+- Package metadata: English descriptions, keywords, Python classifiers, links to the
+  documentation, issues and changelog.
+- `@wyrlo/mcp`: `server.json` and `mcpName` for the official MCP Registry.
+
+## 0.1.0 (2026-11-12)
+
+First public release.
+
+- `@wyrlo/sdk` (TypeScript): `guard`, `prepare`, `feedback`, client-side masking, no-copy
+  index (`index`, `indexMany`, `search`, `remove`, `indexStats`, `removeTenant`).
+- `wyrlo` (Python): the same API, plus LangChain and LlamaIndex integrations.
+- `@wyrlo/mcp`: MCP server (stdio) with `wyrlo_prepare`, `wyrlo_search`, `wyrlo_guard`,
+  `wyrlo_feedback`.
