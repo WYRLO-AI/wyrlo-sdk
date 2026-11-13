@@ -221,7 +221,7 @@ describe("Wyrlo.guard", () => {
     const res = await wyrlo.guard({ question: "Q ?", passages: PASSAGES, answer: "R." });
     expect(calls).toHaveLength(1);
     expect(res).toMatchObject({ degraded: true, decision: "answer", trace_id: null });
-    expect(res.reason).toMatch(/surchargé/);
+    expect(res.reason).toMatch(/overloaded/);
   });
 
   it("délai total par défaut de 3 s, nouvelle tentative comprise", async () => {
@@ -284,6 +284,21 @@ describe("Wyrlo.guard", () => {
     expect(await regionOf({ region: "eu-central-1" })).toBe("eu-central-1");
     vi.stubEnv("WYRLO_REGION", "  ");
     expect(await regionOf({})).toBe("eu-west-3");
+  });
+
+  it("option locale : en-tête Accept-Language, absent par défaut (l'API répond en anglais)", async () => {
+    const languageOf = async (options: { locale?: "en" | "fr" }) => {
+      const { impl, calls } = fakeFetch([json(200, OK)]);
+      await new Wyrlo({ apiKey: KEY, fetch: impl, ...options }).guard({
+        question: "Q ?",
+        passages: PASSAGES,
+        answer: "R.",
+      });
+      return (calls[0]?.init.headers as Record<string, string>)["accept-language"];
+    };
+    expect(await languageOf({})).toBeUndefined();
+    expect(await languageOf({ locale: "fr" })).toBe("fr");
+    expect(await languageOf({ locale: "en" })).toBe("en");
   });
 });
 
@@ -568,7 +583,7 @@ describe("masquage côté client (option mask)", () => {
       expect(res.confidence).toBe("unverified");
       expect(res.skipped_steps).toContain("anonymize");
       expect(res.answer).toBe(ANSWER);
-      expect(res.reason).toMatch(/Masquage local en échec/);
+      expect(res.reason).toMatch(/Local masking failed/);
     }
   });
 

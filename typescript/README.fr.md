@@ -71,6 +71,7 @@ const res = await wyrlo.guard({
 | `decision`              | `answer` ou `abstain` (« je ne sais pas »)                                                                           |
 | `confidence`            | `certain`, `probable`, `uncertain`, `unverified` (réponse transmise sans aucun contrôle)                             |
 | `confidence_score`      | Score de cohérence de la réponse (anglais), ou score des signaux (autres langues) ; null si rien n'a pu être vérifié |
+| `reason`                | Explication courte, en anglais (option `locale: "fr"` pour le français)                                              |
 | `passages[].kept`       | Passages à citer ; `injection: true` = écarté                                                                        |
 | `unsupported_sentences` | Phrases de la réponse qu'aucun passage n'appuie                                                                      |
 | `skipped_steps`         | Traitements sautés côté WYRLO (serveur lent ou indisponible)                                                         |
@@ -105,6 +106,7 @@ new Wyrlo({
   timeoutMs: 3000, // au total, nouvelle tentative comprise
   maxRetries: 1,
   mask: false, // true : masquage sur votre serveur avant l'envoi (voir ci-dessous)
+  locale: "fr", // langue de reason et des erreurs de l'API : "en" (par défaut) ou "fr"
 });
 ```
 

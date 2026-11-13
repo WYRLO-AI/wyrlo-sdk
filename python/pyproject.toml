@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wyrlo"
-version = "0.1.1"
+version = "0.1.2"
 description = "Stop RAG hallucinations: verify LLM answers against their sources and say \"I don't know\" instead of guessing."
 readme = "README.md"
 requires-python = ">=3.9"

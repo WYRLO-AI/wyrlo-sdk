@@ -47,7 +47,7 @@ export { maskTexts, unmaskText, type MaskedTexts } from "./masking.ts";
 
 /** Adresse par défaut de l'API (option `baseUrl` ou variable d'environnement `WYRLO_BASE_URL`). */
 export const DEFAULT_BASE_URL = "https://api.wyrlo.io/functions/v1";
-export const SDK_VERSION = "0.1.1";
+export const SDK_VERSION = "0.1.2";
 /**
  * Région d'exécution imposée à la fonction `guard` : Paris, région du projet (ADR 0003).
  *
@@ -80,6 +80,11 @@ export interface WyrloOptions {
    * (1 par défaut). Jamais après une réponse « surchargé » (503, 429).
    */
   maxRetries?: number;
+  /**
+   * Langue des messages et des raisons (`reason`) renvoyés par l'API : « en » (anglais, par
+   * défaut) ou « fr » (français), par l'en-tête Accept-Language.
+   */
+  locale?: "en" | "fr";
   /**
    * Masquage côté client, avant tout envoi (question, réponse, texte des passages) :
    * - `true` : les règles du masquage intégré de WYRLO (e-mails, téléphones, IBAN, cartes,
@@ -269,6 +274,8 @@ export class Wyrlo {
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly region: string;
+  /** En-tête Accept-Language (option `locale`), vide sans option. */
+  private readonly language: Record<string, string>;
   private readonly timeoutMs: number;
   private readonly maxRetries: number;
   private readonly doFetch: typeof fetch;
@@ -280,7 +287,7 @@ export class Wyrlo {
       throw new WyrloError(
         0,
         "missing_api_key",
-        "Clé d'API manquante : passez apiKey ou définissez WYRLO_API_KEY.",
+        "Missing API key: pass apiKey or set WYRLO_API_KEY.",
       );
     }
     this.apiKey = apiKey;
@@ -294,11 +301,12 @@ export class Wyrlo {
       throw new WyrloError(
         0,
         "insecure_base_url",
-        "Adresse de l'API refusée : https exigé (la clé partirait en clair).",
+        "API address refused: https required (the key would be sent in clear text).",
       );
     }
     // Une valeur vide retombe sur Paris : ne jamais laisser la région au hasard.
     this.region = options.region?.trim() || env("WYRLO_REGION")?.trim() || DEFAULT_REGION;
+    this.language = options.locale ? { "accept-language": options.locale } : {};
     this.timeoutMs = options.timeoutMs ?? 3_000;
     this.maxRetries = Math.max(0, options.maxRetries ?? 1);
     this.doFetch = options.fetch ?? globalThis.fetch.bind(globalThis);
@@ -331,7 +339,7 @@ export class Wyrlo {
       if (!masked.ok) {
         return this.degradedResult(input, answer, requestId, started, {
           reason:
-            "Masquage local en échec : rien n'a été envoyé à WYRLO, réponse transmise sans vérification.",
+            "Local masking failed: nothing was sent to WYRLO, answer passed through without verification.",
           steps: [...ALL_STEPS, "anonymize"],
           localMasking: null,
         });
@@ -401,8 +409,8 @@ export class Wyrlo {
 
     return this.degradedResult(input, answer, requestId, started, {
       reason: overloaded
-        ? "WYRLO momentanément surchargé : réponse transmise sans vérification."
-        : "WYRLO injoignable : réponse transmise sans vérification.",
+        ? "WYRLO temporarily overloaded: answer passed through without verification."
+        : "WYRLO unreachable: answer passed through without verification.",
       steps: ALL_STEPS,
       localMasking,
     });
@@ -486,6 +494,7 @@ export class Wyrlo {
           "x-wyrlo-sdk": `typescript/${SDK_VERSION}`,
           "x-wyrlo-api-version": API_VERSION,
           "x-region": this.region,
+          ...this.language,
         },
         body: JSON.stringify({ question, request_id: requestId }),
         signal: controller.signal,
@@ -498,7 +507,7 @@ export class Wyrlo {
         throw new WyrloError(
           response.status,
           error?.code ?? "invalid_request",
-          error?.message ?? `Requête refusée (${response.status}).`,
+          error?.message ?? `Request refused (${response.status}).`,
           error?.details,
         );
       }
@@ -550,6 +559,7 @@ export class Wyrlo {
           "x-wyrlo-sdk": `typescript/${SDK_VERSION}`,
           "x-wyrlo-api-version": API_VERSION,
           "x-region": this.region,
+          ...this.language,
         },
         body: JSON.stringify({ trace_id: input.traceId, helpful: input.helpful }),
         signal: controller.signal,
@@ -562,7 +572,7 @@ export class Wyrlo {
         throw new WyrloError(
           response.status,
           error?.code ?? "invalid_request",
-          error?.message ?? `Requête refusée (${response.status}).`,
+          error?.message ?? `Request refused (${response.status}).`,
           error?.details,
         );
       }
@@ -588,7 +598,7 @@ export class Wyrlo {
       throw new WyrloError(
         0,
         "mask_unsupported",
-        "Option mask active : index() n'envoie pas votre texte sans allowUnmasked: true.",
+        "mask option on: index() does not send your text without allowUnmasked: true.",
       );
     }
     const body: IndexPutRequest = {
@@ -629,7 +639,7 @@ export class Wyrlo {
       throw new WyrloError(
         0,
         "mask_unsupported",
-        "Option mask active : indexMany() n'envoie pas votre texte sans allowUnmasked: true.",
+        "mask option on: indexMany() does not send your text without allowUnmasked: true.",
       );
     }
     const body: IndexBatchRequest = {
@@ -693,7 +703,7 @@ export class Wyrlo {
     tenant: string,
     options: { timeoutMs?: number } = {},
   ): Promise<IndexTenantDeleteResponse> {
-    if (!tenant) throw new WyrloError(0, "invalid_request", "tenant : identifiant attendu.");
+    if (!tenant) throw new WyrloError(0, "invalid_request", "tenant: identifier expected.");
     const out = await this.call(
       "DELETE",
       `/guard/index${tenantQuery(tenant)}`,
@@ -761,6 +771,7 @@ export class Wyrlo {
           "x-wyrlo-api-version": API_VERSION,
           // Le texte d'un document est traité à Paris, pas dans la région la plus proche.
           "x-region": this.region,
+          ...this.language,
         },
         ...(body === null ? {} : { body: JSON.stringify(body) }),
         signal: controller.signal,
@@ -784,7 +795,7 @@ export class Wyrlo {
         error: new WyrloError(
           response.status,
           error?.code ?? "invalid_request",
-          error?.message ?? `Requête refusée (${response.status}).`,
+          error?.message ?? `Request refused (${response.status}).`,
           error?.details,
         ),
       };
@@ -802,7 +813,7 @@ export class Wyrlo {
     return new WyrloError(
       out.status,
       "unavailable",
-      "WYRLO injoignable ou momentanément surchargé : rien n'a été fait, réessayez plus tard.",
+      "WYRLO unreachable or temporarily overloaded: nothing was done, try again later.",
     );
   }
 
@@ -827,6 +838,7 @@ export class Wyrlo {
           "x-wyrlo-api-version": API_VERSION,
           // Traitement du texte en clair à Paris, pas dans la région la plus proche.
           "x-region": this.region,
+          ...this.language,
         },
         body: JSON.stringify(body),
         signal: controller.signal,
@@ -845,7 +857,7 @@ export class Wyrlo {
           error: new WyrloError(
             response.status,
             error?.code ?? "invalid_request",
-            error?.message ?? `Requête refusée (${response.status}).`,
+            error?.message ?? `Request refused (${response.status}).`,
             error?.details,
           ),
         };

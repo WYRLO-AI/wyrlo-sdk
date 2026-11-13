@@ -32,7 +32,7 @@ if not res.should_answer:
 return res.answer  # cite res.kept_passages
 ```
 
-`res.reason` is a short explanation, currently in French.
+`res.reason` is a short explanation, in English (`locale="fr"` for French).
 
 Recommended: prepare the search with your settings' vocabulary, and pass the same request
 identifier to `guard`:
@@ -97,7 +97,8 @@ A missing or refused key, or an invalid request, raises `WyrloError`
 ## Options
 
 ```python
-Wyrlo(api_key="wyr_live_…", base_url=None, timeout=3.0, max_retries=1, region=None, mask=None)
+Wyrlo(api_key="wyr_live_…", base_url=None, timeout=3.0, max_retries=1, region=None,
+      mask=None, locale=None)
 ```
 
 `base_url`: default `WYRLO_BASE_URL`, otherwise `DEFAULT_BASE_URL` (exported by the
@@ -109,6 +110,9 @@ back to Paris). Each call sends the `X-Region` header: without it, Supabase woul
 function in the region closest to your server (for example `us-east-1`), while the
 question, passages and answer arrive there in clear, before masking. The
 `x-sb-edge-region` response header confirms the processing region.
+
+`locale`: language of `reason` and of the API error messages. English by default; `"fr"`
+for French (sent as the `Accept-Language` header).
 
 ## Client-side masking
 
