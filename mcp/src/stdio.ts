@@ -29,7 +29,7 @@ export async function serveStdio(
     try {
       message = JSON.parse(line);
     } catch {
-      send({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "JSON illisible." } });
+      send({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Invalid JSON." } });
       continue;
     }
     // Les appels d'outils peuvent se chevaucher : chacun répond dès qu'il est prêt.

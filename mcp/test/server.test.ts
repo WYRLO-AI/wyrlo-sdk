@@ -29,6 +29,18 @@ const call = (client: WyrloClient, name: string, args: Record<string, unknown>) 
   });
 
 describe("serveur MCP", () => {
+  it("textes montrés aux agents en anglais : consignes, outils, paramètres, erreurs", async () => {
+    const client = fakeClient();
+    const init = await handleMessage(client, { jsonrpc: "2.0", id: 1, method: "initialize" });
+    const list = await handleMessage(client, { jsonrpc: "2.0", id: 2, method: "tools/list" });
+    const bad = await call(client, "wyrlo_guard", { question: "", answer: "a", passages: [] });
+    const unknown = await call(client, "inconnu", {});
+    const shown = JSON.stringify([init, list, bad, unknown]);
+    expect(shown).toContain("wyrlo_guard");
+    // Aucune lettre accentuée ni guillemet français : les agents lisent ces textes en anglais.
+    expect(shown).not.toMatch(/[àâçéèêëîïôûùüÿœæ«»]/i);
+  });
+
   it("initialize : version du client si connue, sinon la plus récente ; outils annoncés", async () => {
     const client = fakeClient();
     const known = await handleMessage(client, {
@@ -182,7 +194,7 @@ describe("serveur MCP", () => {
     expect(replies).toHaveLength(2);
     expect(replies).toEqual(
       expect.arrayContaining([
-        { jsonrpc: "2.0", id: null, error: { code: -32700, message: "JSON illisible." } },
+        { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Invalid JSON." } },
         { jsonrpc: "2.0", id: 1, result: {} },
       ]),
     );

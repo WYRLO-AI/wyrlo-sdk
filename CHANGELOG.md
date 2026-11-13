@@ -2,6 +2,13 @@
 
 All notable changes to the WYRLO SDKs. Versions follow [Semantic Versioning](https://semver.org).
 
+## 0.1.2 (2026-11-13), `@wyrlo/mcp` only
+
+- Everything the MCP server shows to agents is now in English: server instructions, tool
+  titles and descriptions, parameter descriptions and error messages. The tools, their
+  parameters and their results do not change.
+- `@wyrlo/sdk` and `wyrlo` stay at 0.1.1 (no change).
+
 ## 0.1.1 (2026-11-13)
 
 No change to the code or the API: documentation and package metadata only.
