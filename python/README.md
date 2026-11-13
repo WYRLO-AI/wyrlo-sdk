@@ -88,7 +88,7 @@ Network failure, timeout (3 s in total by default, retry included) or 5xx error:
 with the same `request_id` (the question is counted only once), then a **degraded**
 result: `decision="answer"`, `confidence="unverified"`, `degraded=True`.
 
-Monthly cap of the free tier reached (2,000 analysed questions per month): same degraded
+Monthly cap of the free tier reached (1,000 analysed questions per month): same degraded
 result, with `quota_exceeded=True`, until the next month.
 
 A missing or refused key, or an invalid request, raises `WyrloError`
@@ -209,7 +209,7 @@ wyrlo.index_stats()  # figures only, no identifier
   measured on 283 unseen questions, the right passage is in the top 5 for 85.2% of
   questions with the title, against 79.9% without. Change the `version` if the title
   changes.
-- Limits: 5,000 documents and 100,000 passages per project; 2,000 passages and 400,000
+- Limits: 5,000 documents (500 on the Free plan) and 100,000 passages per project; 2,000 passages and 400,000
   characters per document.
 
 ### One space per end customer (mode C, platforms)
@@ -228,7 +228,8 @@ wyrlo.remove_tenant("client-42")  # the whole space, right away (end of contract
 ```
 
 Without `tenant`, everything happens in the project's default space. The limits remain
-those of the project. The LangChain and LlamaIndex retrievers take the same parameter:
+those of the project. Developer and Production plans (on the Free plan, a call with
+`tenant` is refused: 422 `invalid_request` on the `tenant` field). The LangChain and LlamaIndex retrievers take the same parameter:
 `WyrloRetriever(client=wyrlo, read=read, tenant="client-42")`.
 
 `passages_from_search(res.results, read)` runs the loop above for you: `read` receives

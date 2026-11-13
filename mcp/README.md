@@ -52,12 +52,12 @@ cannot search another customer's space.
 
 ## Tools
 
-| Tool             | Role                                                                                                                       |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `wyrlo_prepare`  | The question to search for, enriched with the project's vocabulary.                                                        |
-| `wyrlo_search`   | The addresses of the closest passages in the no-copy index (mode B, open on request). Never any text.                      |
-| `wyrlo_guard`    | Verifies the answer against its passages. `abstain`: say "I don't know". Also flags injections and stale passages.         |
-| `wyrlo_feedback` | End-user feedback (thumbs), with the `trace_id` from `wyrlo_guard`. No text sent.                                          |
+| Tool             | Role                                                                                                               |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `wyrlo_prepare`  | The question to search for, enriched with the project's vocabulary.                                                |
+| `wyrlo_search`   | The addresses of the closest passages in the no-copy index (mode B, open on request). Never any text.              |
+| `wyrlo_guard`    | Verifies the answer against its passages. `abstain`: say "I don't know". Also flags injections and stale passages. |
+| `wyrlo_feedback` | End-user feedback (thumbs), with the `trace_id` from `wyrlo_guard`. No text sent.                                  |
 
 With the no-copy index, the agent searches with `wyrlo_search`, reads the text with its
 own tools (files, database, business tool), then passes each passage to `wyrlo_guard`

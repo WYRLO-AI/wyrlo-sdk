@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wyrlo"
-version = "0.1.0"
+version = "0.1.1"
 description = "Stop RAG hallucinations: verify LLM answers against their sources and say \"I don't know\" instead of guessing."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -39,8 +39,8 @@ llamaindex = ["llama-index-core>=0.14"]
 
 [project.urls]
 Homepage = "https://www.wyrlo.io"
-Documentation = "https://www.wyrlo.io/docs"
 Source = "https://github.com/WYRLO-AI/wyrlo-sdk"
+Documentation = "https://www.wyrlo.io/docs"
 Issues = "https://github.com/WYRLO-AI/wyrlo-sdk/issues"
 Changelog = "https://github.com/WYRLO-AI/wyrlo-sdk/blob/main/CHANGELOG.md"
 

@@ -32,7 +32,10 @@ async function check(question: string, answer: string) {
 
 async function main() {
   // Supported by the "refunds-2" passage.
-  await check("How long do customers have to ask for a refund?", "Customers have 30 days after delivery.");
+  await check(
+    "How long do customers have to ask for a refund?",
+    "Customers have 30 days after delivery.",
+  );
   // Nothing in the passages talks about gift cards: the answer is invented.
   await check("Can I pay with a gift card?", "Yes, all gift cards are accepted at checkout.");
 }

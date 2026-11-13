@@ -3,7 +3,7 @@
   "name": "io.github.WYRLO-AI/wyrlo",
   "title": "WYRLO",
   "description": "Verify agent answers against their sources; say \"I don't know\" instead of guessing.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "websiteUrl": "https://www.wyrlo.io/docs",
   "repository": {
     "url": "https://github.com/WYRLO-AI/wyrlo-sdk",
@@ -14,7 +14,7 @@
     {
       "registryType": "npm",
       "identifier": "@wyrlo/mcp",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "transport": { "type": "stdio" },
       "environmentVariables": [
         {

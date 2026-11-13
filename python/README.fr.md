@@ -88,7 +88,7 @@ une nouvelle tentative
 avec le même `request_id` (la question n'est comptée qu'une fois), puis un résultat
 **dégradé** : `decision="answer"`, `confidence="unverified"`, `degraded=True`.
 
-Plafond mensuel de l'offre gratuite atteint (2 000 questions analysées par mois) : même
+Plafond mensuel de l'offre gratuite atteint (1 000 questions analysées par mois) : même
 résultat dégradé, avec `quota_exceeded=True`, jusqu'au mois suivant.
 
 Une clé absente ou refusée, ou une requête invalide, lève `WyrloError`
@@ -211,10 +211,13 @@ wyrlo.index_stats()  # chiffres seulement, aucun identifiant
   un : mesuré sur 283 questions jamais vues, le bon passage arrive dans les 5 premiers pour
   85,2 % des questions avec le titre, contre 79,9 % sans. Changez la `version` si le titre
   change.
-- Limites : 5 000 documents et 100 000 passages par projet ; 2 000 passages et
+- Limites : 5 000 documents (500 sur l'offre Gratuit) et 100 000 passages par projet ; 2 000 passages et
   400 000 caractères par document.
 
 ### Un espace par client final (mode C, plateformes)
+
+Offres Développeur et Production (sur l'offre Gratuit, un appel avec `tenant` est refusé :
+422 `invalid_request` sur le champ `tenant`).
 
 Si vous offrez un assistant à vos propres clients, rangez les documents de chacun dans
 son espace, avec un identifiant opaque de votre choix (jamais un nom ni une adresse

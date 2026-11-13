@@ -1,7 +1,7 @@
 {
   "name": "@wyrlo/mcp",
   "mcpName": "io.github.WYRLO-AI/wyrlo",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP server for WYRLO: agents verify their answers against their sources and say \"I don't know\" instead of guessing.",
   "license": "Apache-2.0",
   "author": "Mayeul FLORY, entrepreneur individuel (FUSION-IA) <contact@wyrlo.io>",
@@ -49,7 +49,7 @@
     "prepublishOnly": "node scripts/confirm-publish.mjs && npm run build && npm test"
   },
   "dependencies": {
-    "@wyrlo/sdk": "^0.1.0"
+    "@wyrlo/sdk": "^0.1.1"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

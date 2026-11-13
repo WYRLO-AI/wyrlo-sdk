@@ -55,7 +55,7 @@ __all__ = [
     "unmask_text",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 API_VERSION = "2026-09-25"
 #: Adresse par défaut de l'API (``base_url`` ou variable d'environnement ``WYRLO_BASE_URL``).
 DEFAULT_BASE_URL = "https://api.wyrlo.io/functions/v1"

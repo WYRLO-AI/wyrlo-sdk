@@ -65,22 +65,22 @@ const res = await wyrlo.guard({
 
 ## What `guard` returns
 
-| Field                   | Meaning                                                                                                                    |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `decision`              | `answer` or `abstain` ("I don't know")                                                                                     |
-| `confidence`            | `certain`, `probable`, `uncertain`, `unverified` (answer passed through without any check)                                 |
-| `confidence_score`      | Consistency score of the answer (English), or score of the signals (other languages); null if nothing could be verified    |
-| `reason`                | Short explanation (currently in French)                                                                                    |
-| `passages[].kept`       | Passages to cite; `injection: true` = set aside                                                                            |
-| `unsupported_sentences` | Sentences of the answer that no passage supports                                                                           |
-| `skipped_steps`         | Processing steps skipped on the WYRLO side (slow or unavailable server)                                                    |
-| `language`              | Language used (given or detected), null if unknown                                                                         |
-| `rerank_method`         | `similarity` (passages reordered by similarity), `none` (your search order); similarity remains a signal                   |
-| `verification_method`   | `answer` (English); `sentences`; `signals` (other languages); `model` (French, language model); `none`                     |
-| `degraded`              | Degraded mode: step skipped, WYRLO unreachable or cap reached; always true if `unverified`                                 |
-| `quota_exceeded`        | True if the monthly cap of the free tier is reached (2,000 analysed questions)                                             |
-| `settings_variant`      | During a partial test of the settings: `control` or `candidate`; null otherwise                                            |
-| `trace_id`              | Identifier of the trace in your WYRLO space (null if the question was not analysed)                                        |
+| Field                   | Meaning                                                                                                                 |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `decision`              | `answer` or `abstain` ("I don't know")                                                                                  |
+| `confidence`            | `certain`, `probable`, `uncertain`, `unverified` (answer passed through without any check)                              |
+| `confidence_score`      | Consistency score of the answer (English), or score of the signals (other languages); null if nothing could be verified |
+| `reason`                | Short explanation (currently in French)                                                                                 |
+| `passages[].kept`       | Passages to cite; `injection: true` = set aside                                                                         |
+| `unsupported_sentences` | Sentences of the answer that no passage supports                                                                        |
+| `skipped_steps`         | Processing steps skipped on the WYRLO side (slow or unavailable server)                                                 |
+| `language`              | Language used (given or detected), null if unknown                                                                      |
+| `rerank_method`         | `similarity` (passages reordered by similarity), `none` (your search order); similarity remains a signal                |
+| `verification_method`   | `answer` (English); `sentences`; `signals` (other languages); `model` (French, language model); `none`                  |
+| `degraded`              | Degraded mode: step skipped, WYRLO unreachable or cap reached; always true if `unverified`                              |
+| `quota_exceeded`        | True if the monthly cap of the free tier is reached (1,000 analysed questions)                                          |
+| `settings_variant`      | During a partial test of the settings: `control` or `candidate`; null otherwise                                         |
+| `trace_id`              | Identifier of the trace in your WYRLO space (null if the question was not analysed)                                     |
 
 ## Outages: never blocking
 
@@ -89,7 +89,7 @@ retries once with the same `request_id` (the question is counted only once), the
 a **degraded** result: `decision: "answer"`, `confidence: "unverified"`, `degraded: true`.
 Your user always gets an answer.
 
-Monthly cap of the free tier reached (2,000 analysed questions per month): same degraded
+Monthly cap of the free tier reached (1,000 analysed questions per month): same degraded
 result, with `quota_exceeded: true`, until the next month.
 
 An error in your integration (missing or revoked key, invalid request) throws a
@@ -195,7 +195,7 @@ await wyrlo.indexStats(); // figures only, no identifier
   measured on 283 unseen questions, the right passage is in the top 5 for 85.2% of
   questions with the title, against 79.9% without. Change the `version` if the title
   changes.
-- Limits: 5,000 documents and 100,000 passages per project; 2,000 passages and 400,000
+- Limits: 5,000 documents (500 on the Free plan) and 100,000 passages per project; 2,000 passages and 400,000
   characters per document.
 
 ### One space per end customer (mode C, platforms)
@@ -214,7 +214,8 @@ await wyrlo.removeTenant("client-42"); // the whole space, right away (end of co
 ```
 
 Without `tenant`, everything happens in the project's default space. The limits remain
-those of the project.
+those of the project. Developer and Production plans (on the Free plan, a call with
+`tenant` is refused: 422 `invalid_request` on the `tenant` field).
 
 ## API address
 
