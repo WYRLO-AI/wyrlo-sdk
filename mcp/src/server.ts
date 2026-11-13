@@ -19,7 +19,7 @@
 import { type GuardPassageInput, type Wyrlo, WyrloError } from "@wyrlo/sdk";
 
 export const SERVER_NAME = "wyrlo";
-export const SERVER_VERSION = "0.1.1";
+export const SERVER_VERSION = "0.1.2";
 /** Versions du protocole acceptées, de la plus récente à la plus ancienne. */
 export const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"] as const;
 
@@ -59,13 +59,16 @@ interface Tool {
 const PASSAGE_SCHEMA: Json = {
   type: "object",
   properties: {
-    id: { type: "string", description: "Identifiant stable du passage (sinon sa position)." },
-    text: { type: "string", description: "Texte du passage, tel que vous l'avez lu." },
-    source: { type: "string", description: "Document d'origine, par exemple « CGV.pdf »." },
+    id: {
+      type: "string",
+      description: "Stable identifier of the passage (otherwise its position).",
+    },
+    text: { type: "string", description: "Text of the passage, as you read it." },
+    source: { type: "string", description: 'Source document, for example "terms.pdf".' },
     address: {
       type: "object",
       description:
-        "Adresse rendue par wyrlo_search, à recopier telle quelle : un passage modifié depuis son indexation est alors signalé « stale ».",
+        'Address returned by wyrlo_search, to copy as is: a passage modified since it was indexed is then flagged "stale".',
       properties: {
         document: { type: "string" },
         version: { type: "string" },
@@ -82,30 +85,35 @@ const PASSAGE_SCHEMA: Json = {
 export const TOOLS: Tool[] = [
   {
     name: "wyrlo_prepare",
-    title: "Préparer la recherche",
+    title: "Prepare the search",
     description:
-      "À appeler avant votre recherche : renvoie la question à chercher, enrichie du vocabulaire du projet. Passez ensuite le même request_id à wyrlo_guard.",
+      "Call before your search: returns the question to search for, enriched with the project's vocabulary. Then pass the same request_id to wyrlo_guard.",
     inputSchema: {
       type: "object",
-      properties: { question: { type: "string", description: "Question de l'utilisateur." } },
+      properties: { question: { type: "string", description: "The user's question." } },
       required: ["question"],
     },
     annotations: { readOnlyHint: true, openWorldHint: true },
   },
   {
     name: "wyrlo_search",
-    title: "Chercher dans l'index sans copie",
+    title: "Search the no-copy index",
     description:
-      "Cherche les passages les plus proches de la question dans l'index sans copie du projet (mode B, ouvert sur demande). Rend des adresses (document, version, start, length, fingerprint), jamais de texte : relisez le texte avec vos propres outils, puis passez chaque passage à wyrlo_guard avec son adresse.",
+      "Finds the passages closest to the question in the project's no-copy index (mode B, open on request). Returns addresses (document, version, start, length, fingerprint), never text: read the text with your own tools, then pass each passage to wyrlo_guard with its address.",
     inputSchema: {
       type: "object",
       properties: {
         question: { type: "string" },
-        k: { type: "integer", minimum: 1, maximum: 50, description: "Nombre de résultats (8)." },
+        k: {
+          type: "integer",
+          minimum: 1,
+          maximum: 50,
+          description: "Number of results (default 8).",
+        },
         labels_any: {
           type: "array",
           items: { type: "string" },
-          description: "Documents portant au moins une de ces étiquettes.",
+          description: "Documents carrying at least one of these labels.",
         },
       },
       required: ["question"],
@@ -114,17 +122,17 @@ export const TOOLS: Tool[] = [
   },
   {
     name: "wyrlo_guard",
-    title: "Vérifier une réponse",
+    title: "Verify an answer",
     description:
-      "Vérifie votre réponse contre les passages qui l'appuient, avant de la donner. decision « abstain » : dites que vous ne savez pas. Signale aussi les phrases non appuyées, les injections dans les passages et les passages périmés (stale). Une panne de WYRLO ne bloque jamais : la réponse revient « unverified » et degraded.",
+      'Verifies your answer against the passages that support it, before you give it. decision "abstain": say you don\'t know. Also flags unsupported sentences, injections in the passages and stale passages. A WYRLO outage never blocks: the answer comes back "unverified" and degraded.',
     inputSchema: {
       type: "object",
       properties: {
         question: { type: "string" },
-        answer: { type: "string", description: "La réponse que vous comptez donner." },
+        answer: { type: "string", description: "The answer you intend to give." },
         passages: { type: "array", items: PASSAGE_SCHEMA, minItems: 1 },
-        language: { type: "string", description: "« fr », « en »… (devinée sinon)." },
-        request_id: { type: "string", description: "Celui de wyrlo_prepare, s'il y en a un." },
+        language: { type: "string", description: '"fr", "en"… (detected otherwise).' },
+        request_id: { type: "string", description: "The one from wyrlo_prepare, if any." },
       },
       required: ["question", "answer", "passages"],
     },
@@ -132,9 +140,9 @@ export const TOOLS: Tool[] = [
   },
   {
     name: "wyrlo_feedback",
-    title: "Retour de l'utilisateur",
+    title: "End-user feedback",
     description:
-      "Retour de l'utilisateur final sur une réponse donnée (helpful: true pour un pouce en haut), avec le trace_id rendu par wyrlo_guard. Aucun texte n'est envoyé.",
+      "End-user feedback on an answer given (helpful: true for a thumbs up), with the trace_id returned by wyrlo_guard. No text is sent.",
     inputSchema: {
       type: "object",
       properties: { trace_id: { type: "string" }, helpful: { type: "boolean" } },
@@ -151,7 +159,7 @@ class ArgumentError extends Error {}
 
 function needString(args: Record<string, unknown>, name: string): string {
   const v = args[name];
-  if (!str(v)) throw new ArgumentError(`« ${name} » : texte non vide attendu.`);
+  if (!str(v)) throw new ArgumentError(`"${name}": non-empty text expected.`);
   return v;
 }
 
@@ -159,7 +167,7 @@ function optStringArray(args: Record<string, unknown>, name: string): string[] |
   const v = args[name];
   if (v === undefined || v === null) return undefined;
   if (!Array.isArray(v) || !v.every((x) => typeof x === "string")) {
-    throw new ArgumentError(`« ${name} » : liste de textes attendue.`);
+    throw new ArgumentError(`"${name}": list of texts expected.`);
   }
   return v as string[];
 }
@@ -167,11 +175,11 @@ function optStringArray(args: Record<string, unknown>, name: string): string[] |
 function passagesArg(args: Record<string, unknown>): GuardPassageInput[] {
   const v = args.passages;
   if (!Array.isArray(v) || v.length === 0) {
-    throw new ArgumentError("« passages » : liste non vide attendue.");
+    throw new ArgumentError('"passages": non-empty list expected.');
   }
   return v.map((raw, i) => {
     if (typeof raw !== "object" || raw === null || !str((raw as { text?: unknown }).text)) {
-      throw new ArgumentError(`« passages[${i}].text » : texte non vide attendu.`);
+      throw new ArgumentError(`"passages[${i}].text": non-empty text expected.`);
     }
     const p = raw as Record<string, unknown>;
     const out: GuardPassageInput = { text: p.text as string };
@@ -204,7 +212,7 @@ async function callTool(
     case "wyrlo_search": {
       const k = args.k;
       if (k !== undefined && (typeof k !== "number" || !Number.isInteger(k))) {
-        throw new ArgumentError("« k » : entier attendu.");
+        throw new ArgumentError('"k": integer expected.');
       }
       const labelsAny = optStringArray(args, "labels_any");
       const out = await client.search({
@@ -229,7 +237,7 @@ async function callTool(
     }
     case "wyrlo_feedback": {
       if (typeof args.helpful !== "boolean") {
-        throw new ArgumentError("« helpful » : vrai ou faux attendu.");
+        throw new ArgumentError('"helpful": true or false expected.');
       }
       const out = await client.feedback({
         traceId: needString(args, "trace_id"),
@@ -261,7 +269,7 @@ export async function handleMessage(
     return {
       jsonrpc: "2.0",
       id: typeof id === "string" || typeof id === "number" ? id : null,
-      error: { code: -32600, message: "Requête JSON-RPC invalide." },
+      error: { code: -32600, message: "Invalid JSON-RPC request." },
     };
   }
   const request = message as JsonRpcRequest;
@@ -289,7 +297,7 @@ export async function handleMessage(
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: SERVER_NAME, title: "WYRLO", version: SERVER_VERSION },
         instructions:
-          "Avant de répondre à partir de documents, faites vérifier votre réponse par wyrlo_guard. Si decision vaut « abstain », dites que vous ne savez pas. Avec l'index sans copie, cherchez par wyrlo_search, relisez le texte avec vos outils, et recopiez l'adresse de chaque passage.",
+          "Before answering from documents, have your answer verified by wyrlo_guard. If decision is \"abstain\", say you don't know. With the no-copy index, search with wyrlo_search, read the text with your own tools, and copy each passage's address.",
       });
     }
     case "ping":
@@ -300,11 +308,11 @@ export async function handleMessage(
       const name = params.name;
       const args = (params.arguments ?? {}) as Record<string, unknown>;
       if (typeof name !== "string" || typeof args !== "object" || args === null) {
-        return fail(-32602, "Paramètres invalides : name et arguments attendus.");
+        return fail(-32602, "Invalid parameters: name and arguments expected.");
       }
       try {
         const result = await callTool(client, name, args, options);
-        if (result === null) return fail(-32602, `Outil inconnu : ${name}.`);
+        if (result === null) return fail(-32602, `Unknown tool: ${name}.`);
         return ok(result);
       } catch (error) {
         if (error instanceof ArgumentError) {
@@ -321,11 +329,11 @@ export async function handleMessage(
           );
         }
         return ok(
-          textResult({ error: { code: "internal_error", message: "Erreur inattendue." } }, true),
+          textResult({ error: { code: "internal_error", message: "Unexpected error." } }, true),
         );
       }
     }
     default:
-      return fail(-32601, `Méthode inconnue : ${request.method}.`);
+      return fail(-32601, `Unknown method: ${request.method}.`);
   }
 }
