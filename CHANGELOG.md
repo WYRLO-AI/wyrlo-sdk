@@ -2,7 +2,9 @@
 
 All notable changes to the WYRLO SDKs. Versions follow [Semantic Versioning](https://semver.org).
 
-## Unreleased
+## 0.1.1 (2026-11-13)
+
+No change to the code or the API: documentation and package metadata only.
 
 - Documentation in English for the three packages; the French versions stay in
   `README.fr.md`.
@@ -10,6 +12,9 @@ All notable changes to the WYRLO SDKs. Versions follow [Semantic Versioning](htt
 - Package metadata: English descriptions, keywords, Python classifiers, links to the
   documentation, issues and changelog.
 - `@wyrlo/mcp`: `server.json` and `mcpName` for the official MCP Registry.
+- Free tier figures updated: 1,000 analysed questions per month, 500 documents in the
+  no-copy index; one space per end customer (mode C) on the Developer and Production
+  plans.
 
 ## 0.1.0 (2026-11-12)
 

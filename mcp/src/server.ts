@@ -19,7 +19,7 @@
 import { type GuardPassageInput, type Wyrlo, WyrloError } from "@wyrlo/sdk";
 
 export const SERVER_NAME = "wyrlo";
-export const SERVER_VERSION = "0.1.0";
+export const SERVER_VERSION = "0.1.1";
 /** Versions du protocole acceptées, de la plus récente à la plus ancienne. */
 export const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"] as const;
 

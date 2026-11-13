@@ -4,7 +4,7 @@
 
 **Stop RAG hallucinations before your users see them.**
 Check every LLM answer against its sources, cite what supports it, and say
-*"I don't know"* instead of a confident wrong answer.
+_"I don't know"_ instead of a confident wrong answer.
 
 [![npm @wyrlo/sdk](https://img.shields.io/npm/v/@wyrlo/sdk?label=%40wyrlo%2Fsdk)](https://www.npmjs.com/package/@wyrlo/sdk)
 [![npm @wyrlo/mcp](https://img.shields.io/npm/v/@wyrlo/mcp?label=%40wyrlo%2Fmcp)](https://www.npmjs.com/package/@wyrlo/mcp)
@@ -36,11 +36,11 @@ Your retrieval and your LLM stay yours. WYRLO does not replace them.
 
 ## Packages
 
-| Package | Folder | Install |
-| --- | --- | --- |
-| `@wyrlo/sdk`: TypeScript, Node 18+, Deno, Bun | [`typescript/`](typescript/) | `npm install @wyrlo/sdk` |
-| `wyrlo`: Python 3.9+, no dependencies, LangChain and LlamaIndex extras | [`python/`](python/) | `pip install wyrlo` |
-| `@wyrlo/mcp`: MCP server for agents, Node 18+ | [`mcp/`](mcp/) | `npx @wyrlo/mcp` |
+| Package                                                                | Folder                       | Install                  |
+| ---------------------------------------------------------------------- | ---------------------------- | ------------------------ |
+| `@wyrlo/sdk`: TypeScript, Node 18+, Deno, Bun                          | [`typescript/`](typescript/) | `npm install @wyrlo/sdk` |
+| `wyrlo`: Python 3.9+, no dependencies, LangChain and LlamaIndex extras | [`python/`](python/)         | `pip install wyrlo`      |
+| `@wyrlo/mcp`: MCP server for agents, Node 18+                          | [`mcp/`](mcp/)               | `npx @wyrlo/mcp`         |
 
 ## Quickstart
 
@@ -89,7 +89,7 @@ reliability, they do not guarantee it.
 ## Access
 
 The API is currently open on request: [request access](https://www.wyrlo.io/fr/demander-un-acces).
-The free tier includes 2,000 analysed questions per month.
+The free tier includes 1,000 analysed questions per month.
 
 ## License
 

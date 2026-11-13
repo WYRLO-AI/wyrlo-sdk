@@ -47,7 +47,7 @@ export { maskTexts, unmaskText, type MaskedTexts } from "./masking.ts";
 
 /** Adresse par défaut de l'API (option `baseUrl` ou variable d'environnement `WYRLO_BASE_URL`). */
 export const DEFAULT_BASE_URL = "https://api.wyrlo.io/functions/v1";
-export const SDK_VERSION = "0.1.0";
+export const SDK_VERSION = "0.1.1";
 /**
  * Région d'exécution imposée à la fonction `guard` : Paris, région du projet (ADR 0003).
  *

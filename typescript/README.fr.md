@@ -78,7 +78,7 @@ const res = await wyrlo.guard({
 | `rerank_method`         | `similarity` (passages réordonnés par similarité), `none` (ordre de votre recherche) ; la similarité reste un signal |
 | `verification_method`   | `answer` (anglais) ; `sentences` ; `signals` (autres langues) ; `model` (français, modèle de langue) ; `none`        |
 | `degraded`              | Mode dégradé : traitement sauté, WYRLO injoignable ou plafond atteint ; toujours vrai si `unverified`                |
-| `quota_exceeded`        | Vrai si le plafond mensuel de l'offre gratuite est atteint (2 000 questions analysées)                               |
+| `quota_exceeded`        | Vrai si le plafond mensuel de l'offre gratuite est atteint (1 000 questions analysées)                               |
 | `settings_variant`      | Pendant un test partiel des réglages : `control` ou `candidate` ; null sinon                                         |
 | `trace_id`              | Identifiant de la trace dans votre espace WYRLO (null si la question n'a pas été analysée)                           |
 
@@ -89,7 +89,7 @@ erreur 5xx : le SDK réessaie une fois avec le même `request_id` (la question n
 puis renvoie un résultat **dégradé** : `decision: "answer"`, `confidence: "unverified"`,
 `degraded: true`. Votre utilisateur a toujours une réponse.
 
-Plafond mensuel de l'offre gratuite atteint (2 000 questions analysées par mois) : même
+Plafond mensuel de l'offre gratuite atteint (1 000 questions analysées par mois) : même
 résultat dégradé, avec `quota_exceeded: true`, jusqu'au mois suivant.
 
 Une erreur de votre intégration (clé absente ou révoquée, requête invalide) lève une
@@ -196,10 +196,13 @@ await wyrlo.indexStats(); // chiffres seulement, aucun identifiant
   un : mesuré sur 283 questions jamais vues, le bon passage arrive dans les 5 premiers pour
   85,2 % des questions avec le titre, contre 79,9 % sans. Changez la `version` si le titre
   change.
-- Limites : 5 000 documents et 100 000 passages par projet ; 2 000 passages et
+- Limites : 5 000 documents (500 sur l'offre Gratuit) et 100 000 passages par projet ; 2 000 passages et
   400 000 caractères par document.
 
 ### Un espace par client final (mode C, plateformes)
+
+Offres Développeur et Production (sur l'offre Gratuit, un appel avec `tenant` est refusé :
+422 `invalid_request` sur le champ `tenant`).
 
 Si vous offrez un assistant à vos propres clients, rangez les documents de chacun dans
 son espace, avec un identifiant opaque de votre choix (jamais un nom ni une adresse
