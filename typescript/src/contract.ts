@@ -50,6 +50,13 @@ export interface GuardRequest {
   answer: string;
   passages: GuardPassageInput[];
   /**
+   * Client final pour lequel la vérification est faite (plateformes, offre Partenaire) :
+   * identifiant opaque, le même que pour l'index (mode C). Facultatif. La vérification est
+   * alors comptée pour ce client ; un nouveau client final est créé au premier usage, dans
+   * la limite de l'offre.
+   */
+  tenant?: string;
+  /**
    * Langue (« fr », « en », « en-GB »…). Elle décide des traitements : la vérification
    * phrase par phrase et le reclassement par modèle ne sont disponibles qu'en anglais.
    * Si elle manque, WYRLO la devine sur la question et la réponse, puis sur les passages
@@ -116,7 +123,7 @@ export interface GuardResponse {
    * rien n'a pu être vérifié.
    */
   confidence_score: number | null;
-  /** Explication courte, en français. */
+  /** Explication courte : en anglais par défaut, en français avec Accept-Language: fr. */
   reason: string;
   passages: GuardPassageResult[];
   /** Phrases de la réponse qu'aucun passage n'appuie (vérification phrase par phrase). */
@@ -381,4 +388,68 @@ export interface SearchResult extends PassageAddress {
 export interface SearchResponse {
   results: SearchResult[];
   request_id?: string;
+}
+
+// -----------------------------------------------------------------------------
+// POST /guard/answer : la réponse complète en un appel (docs/conception-v1-answer.md)
+// -----------------------------------------------------------------------------
+
+/** Fournisseurs du modèle de rédaction ; « wyrlo » : modèle géré par WYRLO (Mistral, Europe). */
+export const ANSWER_PROVIDERS = [
+  "wyrlo",
+  "openai",
+  "anthropic",
+  "mistral",
+  "azure_openai",
+  "openai_compatible",
+] as const;
+export type AnswerProvider = (typeof ANSWER_PROVIDERS)[number];
+
+export interface AnswerModelInput {
+  provider: AnswerProvider;
+  /** Nom du modèle chez le fournisseur ; facultatif pour « wyrlo ». */
+  name?: string;
+  /** Clé du fournisseur, utilisée pour cet appel seulement : jamais gardée ni journalisée. */
+  api_key?: string;
+  /** Adresse de l'API (`azure_openai`, `openai_compatible`) : https obligatoire. */
+  base_url?: string;
+}
+
+export interface AnswerRequest {
+  question: string;
+  /** Passages relus chez vous (adresses de `/guard/search`) ou venus d'ailleurs. */
+  passages: GuardPassageInput[];
+  tenant?: string;
+  language?: string;
+  /** Absent : modèle enregistré pour le projet s'il existe, sinon modèle géré par WYRLO. */
+  model?: AnswerModelInput;
+  /** Réponse progressive (text/event-stream) : événements `draft` puis `final`. */
+  stream?: boolean;
+  request_id?: string;
+}
+
+export interface AnswerSentence {
+  text: string;
+  confidence: Confidence;
+  /** Identifiants des passages cités par cette phrase. */
+  sources: string[];
+  /** Faux : aucune source valable, ou phrase que la vérification n'appuie pas. */
+  supported: boolean;
+}
+
+export interface AnswerResponse {
+  /** Trace de la vérification ; null si rien n'a été rédigé (« je ne sais pas » du modèle). */
+  trace_id: string | null;
+  decision: Decision;
+  confidence: Confidence;
+  /** Texte complet ; null quand la décision est « abstain ». */
+  answer: string | null;
+  sentences: AnswerSentence[];
+  /** Pistes quand il n'y a pas de réponse : passages les plus proches, sans leur texte. */
+  leads: { id: string; source: string | null }[];
+  reason: string;
+  model: { provider: AnswerProvider; name: string };
+  usage: { input_tokens: number; output_tokens: number };
+  /** Vérification incomplète ou sautée (mode dégradé) : la réponse reste transmise. */
+  degraded: boolean;
 }

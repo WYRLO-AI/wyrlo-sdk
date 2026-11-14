@@ -23,6 +23,9 @@
  */
 
 import {
+  type AnswerProvider,
+  type AnswerRequest,
+  type AnswerResponse,
   API_VERSION,
   type ApiErrorCode,
   type GuardPassageInput,
@@ -38,6 +41,7 @@ import {
   type PrepareResponse,
   type SearchRequest,
   type SearchResponse,
+  type SearchResult,
   type SkippedStep,
 } from "./contract.ts";
 import { maskTexts, unmaskText } from "./masking.ts";
@@ -47,7 +51,7 @@ export { maskTexts, unmaskText, type MaskedTexts } from "./masking.ts";
 
 /** Adresse par défaut de l'API (option `baseUrl` ou variable d'environnement `WYRLO_BASE_URL`). */
 export const DEFAULT_BASE_URL = "https://api.wyrlo.io/functions/v1";
-export const SDK_VERSION = "0.1.1";
+export const SDK_VERSION = "0.1.2";
 /**
  * Région d'exécution imposée à la fonction `guard` : Paris, région du projet (ADR 0003).
  *
@@ -80,6 +84,11 @@ export interface WyrloOptions {
    * (1 par défaut). Jamais après une réponse « surchargé » (503, 429).
    */
   maxRetries?: number;
+  /**
+   * Langue des messages et des raisons (`reason`) renvoyés par l'API : « en » (anglais, par
+   * défaut) ou « fr » (français), par l'en-tête Accept-Language.
+   */
+  locale?: "en" | "fr";
   /**
    * Masquage côté client, avant tout envoi (question, réponse, texte des passages) :
    * - `true` : les règles du masquage intégré de WYRLO (e-mails, téléphones, IBAN, cartes,
@@ -175,6 +184,44 @@ export interface SearchInput {
   timeoutMs?: number;
 }
 
+/**
+ * `answer()` : la réponse complète en un appel (rédaction puis vérification).
+ * Deux façons de donner les passages :
+ * - `read` : WYRLO cherche dans l'index sans copie, votre fonction relit chaque passage chez
+ *   vous à partir de son adresse (WYRLO ne garde jamais le texte) ;
+ * - `passages` : vous les fournissez vous-même.
+ */
+export interface AnswerInput {
+  question: string;
+  /** Relit un passage chez vous ; `null` ou vide : passage ignoré. */
+  read?: (address: SearchResult) => Promise<string | null | undefined> | string | null | undefined;
+  /** Passages déjà en main (à la place de `read`). */
+  passages?: GuardPassageInput[];
+  /** Nombre de passages cherchés avec `read` (8 par défaut, 50 au plus). */
+  k?: number;
+  labelsAny?: string[];
+  keywordHits?: string[];
+  tenant?: string;
+  language?: string;
+  /**
+   * Modèle de rédaction. Absent : celui enregistré pour le projet s'il existe, sinon celui
+   * géré par WYRLO (Europe, après masquage). Le vôtre :
+   * `{ provider, name, apiKey }` (et `baseUrl` pour `azure_openai` et `openai_compatible`).
+   * La clé ne sert qu'à cet appel : elle n'est ni gardée ni journalisée.
+   */
+  model?: { provider: AnswerProvider; name?: string; apiKey?: string; baseUrl?: string };
+  requestId?: string;
+  /** Délai de l'appel de rédaction, en millisecondes (60 000 par défaut). */
+  timeoutMs?: number;
+}
+
+export interface AnswerOutcome extends AnswerResponse {
+  request_id: string;
+}
+
+/** Délai par défaut de `answer()` : un modèle rédige, c'est plus long qu'une vérification. */
+export const ANSWER_TIMEOUT_MS = 60_000;
+
 /** Paramètre `?tenant=` des routes sans corps (mode C). */
 const tenantQuery = (tenant?: string) => (tenant ? `?tenant=${encodeURIComponent(tenant)}` : "");
 
@@ -269,6 +316,8 @@ export class Wyrlo {
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly region: string;
+  /** En-tête Accept-Language (option `locale`), vide sans option. */
+  private readonly language: Record<string, string>;
   private readonly timeoutMs: number;
   private readonly maxRetries: number;
   private readonly doFetch: typeof fetch;
@@ -280,7 +329,7 @@ export class Wyrlo {
       throw new WyrloError(
         0,
         "missing_api_key",
-        "Clé d'API manquante : passez apiKey ou définissez WYRLO_API_KEY.",
+        "Missing API key: pass apiKey or set WYRLO_API_KEY.",
       );
     }
     this.apiKey = apiKey;
@@ -294,11 +343,12 @@ export class Wyrlo {
       throw new WyrloError(
         0,
         "insecure_base_url",
-        "Adresse de l'API refusée : https exigé (la clé partirait en clair).",
+        "API address refused: https required (the key would be sent in clear text).",
       );
     }
     // Une valeur vide retombe sur Paris : ne jamais laisser la région au hasard.
     this.region = options.region?.trim() || env("WYRLO_REGION")?.trim() || DEFAULT_REGION;
+    this.language = options.locale ? { "accept-language": options.locale } : {};
     this.timeoutMs = options.timeoutMs ?? 3_000;
     this.maxRetries = Math.max(0, options.maxRetries ?? 1);
     this.doFetch = options.fetch ?? globalThis.fetch.bind(globalThis);
@@ -331,7 +381,7 @@ export class Wyrlo {
       if (!masked.ok) {
         return this.degradedResult(input, answer, requestId, started, {
           reason:
-            "Masquage local en échec : rien n'a été envoyé à WYRLO, réponse transmise sans vérification.",
+            "Local masking failed: nothing was sent to WYRLO, answer passed through without verification.",
           steps: [...ALL_STEPS, "anonymize"],
           localMasking: null,
         });
@@ -359,6 +409,8 @@ export class Wyrlo {
       passages,
       ...(input.language ? { language: input.language } : {}),
       request_id: requestId,
+      // Client final (plateformes) : la vérification est comptée pour lui.
+      ...(input.tenant ? { tenant: input.tenant } : {}),
     };
 
     // Délai total : nouvelles tentatives comprises, jamais au-delà de `timeoutMs`.
@@ -401,8 +453,8 @@ export class Wyrlo {
 
     return this.degradedResult(input, answer, requestId, started, {
       reason: overloaded
-        ? "WYRLO momentanément surchargé : réponse transmise sans vérification."
-        : "WYRLO injoignable : réponse transmise sans vérification.",
+        ? "WYRLO temporarily overloaded: answer passed through without verification."
+        : "WYRLO unreachable: answer passed through without verification.",
       steps: ALL_STEPS,
       localMasking,
     });
@@ -486,6 +538,7 @@ export class Wyrlo {
           "x-wyrlo-sdk": `typescript/${SDK_VERSION}`,
           "x-wyrlo-api-version": API_VERSION,
           "x-region": this.region,
+          ...this.language,
         },
         body: JSON.stringify({ question, request_id: requestId }),
         signal: controller.signal,
@@ -498,7 +551,7 @@ export class Wyrlo {
         throw new WyrloError(
           response.status,
           error?.code ?? "invalid_request",
-          error?.message ?? `Requête refusée (${response.status}).`,
+          error?.message ?? `Request refused (${response.status}).`,
           error?.details,
         );
       }
@@ -550,6 +603,7 @@ export class Wyrlo {
           "x-wyrlo-sdk": `typescript/${SDK_VERSION}`,
           "x-wyrlo-api-version": API_VERSION,
           "x-region": this.region,
+          ...this.language,
         },
         body: JSON.stringify({ trace_id: input.traceId, helpful: input.helpful }),
         signal: controller.signal,
@@ -562,7 +616,7 @@ export class Wyrlo {
         throw new WyrloError(
           response.status,
           error?.code ?? "invalid_request",
-          error?.message ?? `Requête refusée (${response.status}).`,
+          error?.message ?? `Request refused (${response.status}).`,
           error?.details,
         );
       }
@@ -588,7 +642,7 @@ export class Wyrlo {
       throw new WyrloError(
         0,
         "mask_unsupported",
-        "Option mask active : index() n'envoie pas votre texte sans allowUnmasked: true.",
+        "mask option on: index() does not send your text without allowUnmasked: true.",
       );
     }
     const body: IndexPutRequest = {
@@ -629,7 +683,7 @@ export class Wyrlo {
       throw new WyrloError(
         0,
         "mask_unsupported",
-        "Option mask active : indexMany() n'envoie pas votre texte sans allowUnmasked: true.",
+        "mask option on: indexMany() does not send your text without allowUnmasked: true.",
       );
     }
     const body: IndexBatchRequest = {
@@ -693,7 +747,7 @@ export class Wyrlo {
     tenant: string,
     options: { timeoutMs?: number } = {},
   ): Promise<IndexTenantDeleteResponse> {
-    if (!tenant) throw new WyrloError(0, "invalid_request", "tenant : identifiant attendu.");
+    if (!tenant) throw new WyrloError(0, "invalid_request", "tenant: identifier expected.");
     const out = await this.call(
       "DELETE",
       `/guard/index${tenantQuery(tenant)}`,
@@ -738,6 +792,75 @@ export class Wyrlo {
     return { results: payload.results, request_id: requestId, degraded: false };
   }
 
+  /**
+   * La réponse complète en un appel (`POST /guard/answer`) : un modèle rédige à partir des
+   * passages, WYRLO vérifie toujours, et la réponse revient phrase par phrase avec sa
+   * confiance et ses sources. `decision: "abstain"` : « je ne sais pas », avec des pistes.
+   * Lève une `WyrloError` si la clé, la requête ou le modèle sont refusés, ou si le service
+   * est injoignable : sans réponse rédigée, il n'y a rien à transmettre en mode dégradé.
+   */
+  async answer(input: AnswerInput): Promise<AnswerOutcome> {
+    const requestId = input.requestId ?? newRequestId();
+    let passages = input.passages;
+    if (!passages) {
+      if (!input.read) {
+        throw new WyrloError(0, "invalid_request", "answer() needs `read` or `passages`.");
+      }
+      const found = await this.search({
+        question: input.question,
+        ...(input.k !== undefined ? { k: input.k } : {}),
+        ...(input.labelsAny ? { labelsAny: input.labelsAny } : {}),
+        ...(input.keywordHits ? { keywordHits: input.keywordHits } : {}),
+        ...(input.tenant ? { tenant: input.tenant } : {}),
+      });
+      passages = [];
+      for (const hit of found.results) {
+        const text = await input.read(hit);
+        if (typeof text !== "string" || !text.trim()) continue;
+        passages.push({
+          id: `${hit.document}#${hit.start}`,
+          text,
+          source: hit.document,
+          score: hit.score,
+          address: {
+            document: hit.document,
+            version: hit.version,
+            start: hit.start,
+            length: hit.length,
+            fingerprint: hit.fingerprint,
+          },
+        });
+      }
+    }
+    const model = input.model
+      ? {
+          provider: input.model.provider,
+          ...(input.model.name ? { name: input.model.name } : {}),
+          ...(input.model.apiKey ? { api_key: input.model.apiKey } : {}),
+          ...(input.model.baseUrl ? { base_url: input.model.baseUrl } : {}),
+        }
+      : undefined;
+    const body: AnswerRequest = {
+      question: input.question,
+      passages,
+      ...(input.tenant ? { tenant: input.tenant } : {}),
+      ...(input.language ? { language: input.language } : {}),
+      ...(model ? { model } : {}),
+      request_id: requestId,
+    };
+    const out = await this.call(
+      "POST",
+      "/guard/answer",
+      body,
+      input.timeoutMs ?? ANSWER_TIMEOUT_MS,
+    );
+    if (out.kind === "client_error") throw out.error;
+    if (out.kind !== "ok") {
+      throw new WyrloError(out.status, "unavailable", "WYRLO answer service unavailable.");
+    }
+    return { ...(out.payload as AnswerResponse), request_id: requestId };
+  }
+
   /** Appel simple (routes de l'index) : pas de nouvel essai, délai borné. */
   private async call(
     method: "GET" | "PUT" | "DELETE" | "POST",
@@ -761,6 +884,7 @@ export class Wyrlo {
           "x-wyrlo-api-version": API_VERSION,
           // Le texte d'un document est traité à Paris, pas dans la région la plus proche.
           "x-region": this.region,
+          ...this.language,
         },
         ...(body === null ? {} : { body: JSON.stringify(body) }),
         signal: controller.signal,
@@ -784,7 +908,7 @@ export class Wyrlo {
         error: new WyrloError(
           response.status,
           error?.code ?? "invalid_request",
-          error?.message ?? `Requête refusée (${response.status}).`,
+          error?.message ?? `Request refused (${response.status}).`,
           error?.details,
         ),
       };
@@ -802,7 +926,7 @@ export class Wyrlo {
     return new WyrloError(
       out.status,
       "unavailable",
-      "WYRLO injoignable ou momentanément surchargé : rien n'a été fait, réessayez plus tard.",
+      "WYRLO unreachable or temporarily overloaded: nothing was done, try again later.",
     );
   }
 
@@ -827,6 +951,7 @@ export class Wyrlo {
           "x-wyrlo-api-version": API_VERSION,
           // Traitement du texte en clair à Paris, pas dans la région la plus proche.
           "x-region": this.region,
+          ...this.language,
         },
         body: JSON.stringify(body),
         signal: controller.signal,
@@ -845,7 +970,7 @@ export class Wyrlo {
           error: new WyrloError(
             response.status,
             error?.code ?? "invalid_request",
-            error?.message ?? `Requête refusée (${response.status}).`,
+            error?.message ?? `Request refused (${response.status}).`,
             error?.details,
           ),
         };

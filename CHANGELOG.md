@@ -2,12 +2,35 @@
 
 All notable changes to the WYRLO SDKs. Versions follow [Semantic Versioning](https://semver.org).
 
-## 0.1.2 (2026-11-13), `@wyrlo/mcp` only
+## Unreleased (preview, on the `preview` branch)
 
-- Everything the MCP server shows to agents is now in English: server instructions, tool
-  titles and descriptions, parameter descriptions and error messages. The tools, their
-  parameters and their results do not change.
-- `@wyrlo/sdk` and `wyrlo` stay at 0.1.1 (no change).
+Not published on any registry. Interfaces may still change.
+
+- `answer()` in `@wyrlo/sdk` and `wyrlo`, `wyrlo_answer` tool in `@wyrlo/mcp`: a model
+  writes the answer from the passages, WYRLO always verifies it, and the answer comes back
+  sentence by sentence with its sources, or as "I don't know" with leads
+  (`POST /v1/answer`, preview).
+- `tenant` on `guard()`: the end customer a verification is made for (platforms).
+- `wyrlo` (Python): `output_verifier` and `answer_chain` for LangChain, `verify_response`
+  and `AnswerQueryEngine` for LlamaIndex.
+- New preview folders: `go/`, `php/`, `java/`, `csharp/` (clients generated from the
+  OpenAPI specification, see `PREVIEW.md`; the C# client has not been compiled yet) and
+  `n8n/` (n8n node, not yet run in a real n8n).
+
+## 0.1.2 (2026-11-13)
+
+English by default, everywhere a developer reads a message.
+
+- The API answers in English by default: the `reason` of each decision and the error
+  messages. Send `Accept-Language: fr` to get them in French. The fields, codes and
+  decisions do not change.
+- `@wyrlo/sdk` and `wyrlo`: new `locale` option (`"en"` or `"fr"`), sent as the
+  `Accept-Language` header; without it, the API answers in English. The SDKs' own messages
+  (degraded mode, errors) are now in English.
+- `wyrlo` (LangChain and LlamaIndex integrations): the default prompt is now in English.
+- `@wyrlo/mcp`: everything the server shows to agents is now in English: server
+  instructions, tool titles and descriptions, parameter descriptions and error messages.
+  The tools, their parameters and their results do not change.
 
 ## 0.1.1 (2026-11-13)
 

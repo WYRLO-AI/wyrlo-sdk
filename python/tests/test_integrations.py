@@ -35,6 +35,14 @@ PASSAGES = [
     ("cgv-11", "Le délai de rétractation est de 14 jours après la livraison.", "CGV.pdf"),
     ("faq-2", "La livraison est offerte dès 50 euros.", "FAQ.md"),
 ]
+FINAL = {
+    "trace_id": "t1", "decision": "answer", "confidence": "probable",
+    "answer": "Le délai est de 14 jours.",
+    "sentences": [{"text": "Le délai est de 14 jours.", "confidence": "probable",
+                   "sources": ["cgv-11"], "supported": True}],
+    "leads": [], "reason": "ok", "model": {"provider": "wyrlo", "name": "petit"},
+    "usage": {"input_tokens": 90, "output_tokens": 10}, "degraded": False,
+}
 ABSTAIN = {**OK, "decision": "abstain", "confidence": "uncertain", "confidence_score": 0.1}
 
 
@@ -70,8 +78,9 @@ class LangChainTests(_Base):
                 ]
 
         self.llm = FakeListLLM(responses=[answer])
+        self.retriever = Retriever()
         prompt = PromptTemplate.from_template("Passages : {context}\nQuestion : {question}")
-        return guarded_chain(Retriever(), prompt | self.llm, wyrlo=self.client())
+        return guarded_chain(self.retriever, prompt | self.llm, wyrlo=self.client())
 
     def test_chaine_verifiee_passages_et_reponse_envoyes(self):
         self.api.responses = [(200, OK, 0)]
@@ -91,6 +100,44 @@ class LangChainTests(_Base):
         result = self.build().invoke({"question": "Question hors sujet ?"})
         self.assertFalse(result.should_answer)
         self.assertEqual(self.api.calls[0]["body"]["question"], "Question hors sujet ?")
+
+    def test_verification_de_sortie_seule(self):
+        from langchain_core.documents import Document
+        from langchain_core.messages import AIMessage
+
+        from wyrlo.langchain import output_verifier
+
+        self.api.responses = [(200, OK, 0)]
+        documents = [Document(id=i, page_content=t, metadata={"source": s}) for i, t, s in PASSAGES]
+        result = output_verifier(wyrlo=self.client(), tenant="client-1").invoke(
+            {
+                "question": "Quel est le délai ?",
+                "answer": AIMessage(content="Le délai est de 14 jours."),
+                "documents": documents,
+            }
+        )
+        self.assertTrue(result.should_answer)
+        body = self.api.calls[0]["body"]
+        self.assertEqual(body["answer"], "Le délai est de 14 jours.")
+        self.assertEqual(body["tenant"], "client-1")
+        self.assertEqual([p["id"] for p in body["passages"]], ["cgv-11", "faq-2"])
+
+    def test_moteur_de_questions_answer(self):
+        from wyrlo.langchain import answer_chain
+
+        self.build()
+        retriever = self.retriever
+        self.api.responses = [(200, FINAL, 0)]
+        model = {"provider": "openai", "name": "modele-fictif", "api_key": "cle-fictive"}
+        out = answer_chain(retriever, wyrlo=self.client(), model=model).invoke(
+            {"question": "Quel est le délai ?"}
+        )
+        self.assertEqual(out["sentences"][0]["sources"], ["cgv-11"])
+        call = self.api.calls[0]
+        self.assertTrue(call["path"].endswith("/answer"))
+        self.assertEqual(call["body"]["model"], model)
+        self.assertEqual([p["id"] for p in call["body"]["passages"]], ["cgv-11", "faq-2"])
+        self.assertNotIn("answer", call["body"])
 
     def test_panne_de_wyrlo_reponse_transmise_sans_exception(self):
         self.api.close()
@@ -129,7 +176,8 @@ class LlamaIndexTests(_Base):
 
         seen = []
         self.prompts = seen
-        return GuardedQueryEngine(Retriever(), Llm(), wyrlo=self.client())
+        self.retriever = Retriever()
+        return GuardedQueryEngine(self.retriever, Llm(), wyrlo=self.client())
 
     def test_moteur_verifie_passages_scores_et_prompt(self):
         self.api.responses = [(200, OK, 0)]
@@ -147,6 +195,39 @@ class LlamaIndexTests(_Base):
     def test_refus(self):
         self.api.responses = [(200, ABSTAIN, 0)]
         self.assertFalse(self.build().query("Question hors sujet ?").should_answer)
+
+    def test_verification_de_sortie_seule(self):
+        from llama_index.core.base.response.schema import Response
+
+        from wyrlo.llamaindex import verify_response
+
+        self.build()
+        nodes = self.retriever.retrieve("Quel est le délai ?")
+        self.api.responses = [(200, OK, 0)]
+        result = verify_response(
+            "Quel est le délai ?",
+            Response(response="Le délai est de 14 jours.", source_nodes=nodes),
+            wyrlo=self.client(),
+        )
+        self.assertTrue(result.should_answer)
+        body = self.api.calls[0]["body"]
+        self.assertEqual(body["answer"], "Le délai est de 14 jours.")
+        self.assertEqual([p["id"] for p in body["passages"]], ["cgv-11", "faq-2"])
+
+    def test_moteur_de_questions_answer(self):
+        from wyrlo.llamaindex import AnswerQueryEngine
+
+        self.build()
+        self.api.responses = [(200, FINAL, 0)]
+        out = AnswerQueryEngine(self.retriever, wyrlo=self.client(), tenant="client-1").query(
+            "Quel est le délai ?"
+        )
+        self.assertEqual(out["answer"], "Le délai est de 14 jours.")
+        call = self.api.calls[0]
+        self.assertTrue(call["path"].endswith("/answer"))
+        self.assertEqual(call["body"]["tenant"], "client-1")
+        self.assertNotIn("model", call["body"])
+        self.assertEqual([p["id"] for p in call["body"]["passages"]], ["cgv-11", "faq-2"])
 
 
 FP = "a" * 64

@@ -52,12 +52,13 @@ peut pas chercher dans l'espace d'un autre client.
 
 ## Outils
 
-| Outil            | Rôle                                                                                                                               |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `wyrlo_prepare`  | La question à chercher, enrichie du vocabulaire du projet.                                                                         |
-| `wyrlo_search`   | Les adresses des passages les plus proches dans l'index sans copie (mode B, ouvert sur demande). Jamais de texte.                  |
-| `wyrlo_guard`    | Vérifie la réponse contre ses passages. `abstain` : dire « je ne sais pas ». Signale aussi les injections et les passages périmés. |
-| `wyrlo_feedback` | Retour de l'utilisateur final (pouce), avec le `trace_id` de `wyrlo_guard`. Aucun texte envoyé.                                    |
+| Outil            | Rôle                                                                                                                                                           |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wyrlo_prepare`  | La question à chercher, enrichie du vocabulaire du projet.                                                                                                     |
+| `wyrlo_search`   | Les adresses des passages les plus proches dans l'index sans copie (mode B, ouvert sur demande). Jamais de texte.                                              |
+| `wyrlo_guard`    | Vérifie la réponse contre ses passages. `abstain` : dire « je ne sais pas ». Signale aussi les injections et les passages périmés.                             |
+| `wyrlo_answer`   | Rédige une réponse à partir des passages lus, puis la vérifie : phrases avec leur confiance et leurs sources ; « je ne sais pas » avec des pistes. Préversion. |
+| `wyrlo_feedback` | Retour de l'utilisateur final (pouce), avec le `trace_id` de `wyrlo_guard`. Aucun texte envoyé.                                                                |
 
 Avec l'index sans copie, l'agent cherche par `wyrlo_search`, relit le texte avec ses
 propres outils (fichiers, base, outil métier), puis passe chaque passage à `wyrlo_guard`

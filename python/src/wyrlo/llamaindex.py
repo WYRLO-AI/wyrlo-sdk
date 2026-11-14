@@ -22,9 +22,16 @@ le texte chez vous ; ses nœuds portent l'adresse du passage, que ``GuardedQuery
 transmet à WYRLO (un passage modifié depuis son indexation est signalé « périmé »)::
 
     engine = GuardedQueryEngine(WyrloRetriever(Wyrlo(), lire_chez_vous, k=8), llm)
+
+Vérification de sortie seule, pour un moteur que vous avez déjà : :func:`verify_response`
+reçoit la question et la ``Response`` de LlamaIndex (texte et ``source_nodes``).
+
+Moteur de questions (``POST /v1/answer``, préversion) : :class:`AnswerQueryEngine` cherche
+avec votre retriever, fait rédiger par WYRLO (votre modèle ou celui de WYRLO) et rend la
+réponse vérifiée, phrase par phrase, avec ses sources.
 """
 
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from . import GuardResult, Reader, Wyrlo, passages_from_search
 
@@ -33,14 +40,21 @@ try:
     from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 except ImportError as error:  # pragma: no cover - message d'installation
     raise ImportError(
-        'L\'intégration LlamaIndex demande llama-index-core : pip install "wyrlo[llamaindex]"'
+        'The LlamaIndex integration needs llama-index-core: pip install "wyrlo[llamaindex]"'
     ) from error
 
-__all__ = ["DEFAULT_PROMPT", "GuardedQueryEngine", "WyrloRetriever", "passages_from_nodes"]
+__all__ = [
+    "AnswerQueryEngine",
+    "DEFAULT_PROMPT",
+    "GuardedQueryEngine",
+    "WyrloRetriever",
+    "passages_from_nodes",
+    "verify_response",
+]
 
 DEFAULT_PROMPT = (
-    "Réponds uniquement à partir des passages ci-dessous. Si la réponse n'y figure pas, "
-    "dis que tu ne sais pas.\n\nPassages :\n{context}\n\nQuestion : {question}\nRéponse :"
+    "Answer only from the passages below. If the answer is not there, say that you don't "
+    "know.\n\nPassages:\n{context}\n\nQuestion: {question}\nAnswer:"
 )
 
 
@@ -133,4 +147,60 @@ class GuardedQueryEngine:
 
         return self._wyrlo.guard(
             question=question, passages=passages, generate=generate, language=self._language
+        )
+
+
+def verify_response(
+    question: str,
+    response: Any,
+    wyrlo: Optional[Wyrlo] = None,
+    language: Optional[str] = None,
+    tenant: Optional[str] = None,
+) -> GuardResult:
+    """Vérifie la réponse d'un moteur LlamaIndex que vous avez déjà.
+
+    ``response`` est la ``Response`` rendue par ``query_engine.query(question)`` : son
+    texte et ses ``source_nodes`` partent à WYRLO. Une panne de WYRLO laisse passer la
+    réponse, marquée « non vérifiée », sans exception.
+    """
+    client = wyrlo or Wyrlo()
+    return client.guard(
+        question=question,
+        passages=passages_from_nodes(getattr(response, "source_nodes", None) or []),
+        answer=str(response),
+        language=language,
+        tenant=tenant,
+    )
+
+
+class AnswerQueryEngine:
+    """Recherche, puis réponse rédigée et vérifiée par WYRLO (``POST /v1/answer``).
+
+    Préversion. ``model`` : votre modèle
+    (``{"provider": "openai", "name": "...", "api_key": "..."}``) ; absent, le modèle
+    enregistré pour le projet, sinon celui géré par WYRLO. ``query`` rend le dictionnaire
+    de :meth:`wyrlo.Wyrlo.answer` et lève ``WyrloError`` si rien n'a pu être rédigé.
+    """
+
+    def __init__(
+        self,
+        retriever: Any,
+        wyrlo: Optional[Wyrlo] = None,
+        model: Optional[Mapping[str, Any]] = None,
+        language: Optional[str] = None,
+        tenant: Optional[str] = None,
+    ) -> None:
+        self._retriever = retriever
+        self._wyrlo = wyrlo or Wyrlo()
+        self._model = model
+        self._language = language
+        self._tenant = tenant
+
+    def query(self, question: str) -> Dict[str, Any]:
+        return self._wyrlo.answer(
+            question,
+            passages=passages_from_nodes(self._retriever.retrieve(question)),
+            model=self._model,
+            language=self._language,
+            tenant=self._tenant,
         )

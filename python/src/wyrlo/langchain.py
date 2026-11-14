@@ -22,6 +22,17 @@ transmet à WYRLO (un passage modifié depuis son indexation est signalé « pé
 
     retriever = WyrloRetriever(client=Wyrlo(), read=lire_chez_vous, k=8)
     rag = guarded_chain(retriever, prompt | llm)
+
+Vérification de sortie seule, pour une chaîne que vous avez déjà : :func:`output_verifier`
+reçoit ``{"question", "answer", "documents"}`` et rend un :class:`wyrlo.GuardResult`.
+
+Moteur de questions (``POST /v1/answer``, préversion) : :func:`answer_chain` cherche avec
+votre retriever, fait rédiger par WYRLO (votre modèle ou celui de WYRLO) et rend la réponse
+vérifiée, phrase par phrase, avec ses sources ::
+
+    engine = answer_chain(retriever)
+    result = engine.invoke("Quel est le délai de rétractation ?")
+    print(result["answer"] or "Je ne sais pas.")
 """
 
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Union
@@ -35,10 +46,16 @@ try:
     from langchain_core.runnables import Runnable, RunnableLambda
 except ImportError as error:  # pragma: no cover - message d'installation
     raise ImportError(
-        'L\'intégration LangChain demande langchain-core : pip install "wyrlo[langchain]"'
+        'The LangChain integration needs langchain-core: pip install "wyrlo[langchain]"'
     ) from error
 
-__all__ = ["WyrloRetriever", "guarded_chain", "passages_from_documents"]
+__all__ = [
+    "WyrloRetriever",
+    "answer_chain",
+    "guarded_chain",
+    "output_verifier",
+    "passages_from_documents",
+]
 
 
 def passages_from_documents(documents: Sequence[Document]) -> List[Dict[str, Any]]:
@@ -137,3 +154,63 @@ def guarded_chain(
         )
 
     return RunnableLambda(run, name="wyrlo_guarded_chain")
+
+
+def output_verifier(
+    wyrlo: Optional[Wyrlo] = None,
+    question_key: str = "question",
+    answer_key: str = "answer",
+    documents_key: str = "documents",
+    language: Optional[str] = None,
+    tenant: Optional[str] = None,
+) -> Runnable:
+    """Runnable LangChain : vérifie une réponse déjà rédigée par votre chaîne.
+
+    L'entrée est un dictionnaire : la question, la réponse (chaîne ou message) et les
+    documents LangChain qui ont servi à la rédiger. Le résultat est un
+    :class:`wyrlo.GuardResult` ; une panne de WYRLO laisse passer la réponse, marquée
+    « non vérifiée », sans exception.
+    """
+    client = wyrlo or Wyrlo()
+
+    def run(value: Mapping[str, Any]) -> GuardResult:
+        return client.guard(
+            question=str(value[question_key]),
+            passages=passages_from_documents(value.get(documents_key) or []),
+            answer=_text(value[answer_key]),
+            language=language,
+            tenant=tenant,
+        )
+
+    return RunnableLambda(run, name="wyrlo_output_verifier")
+
+
+def answer_chain(
+    retriever: Any,
+    wyrlo: Optional[Wyrlo] = None,
+    model: Optional[Mapping[str, Any]] = None,
+    question_key: str = "question",
+    language: Optional[str] = None,
+    tenant: Optional[str] = None,
+) -> Runnable:
+    """Runnable LangChain : recherche, puis réponse rédigée et vérifiée par WYRLO.
+
+    Préversion (``POST /v1/answer``). ``model`` : votre modèle
+    (``{"provider": "openai", "name": "...", "api_key": "..."}``) ; absent, le modèle
+    enregistré pour le projet, sinon celui géré par WYRLO. Le résultat est le dictionnaire
+    de :meth:`wyrlo.Wyrlo.answer` : ``decision``, ``answer``, ``sentences`` (texte,
+    confiance, sources), ``leads``. Lève ``WyrloError`` si rien n'a pu être rédigé.
+    """
+    client = wyrlo or Wyrlo()
+
+    def run(value: Union[str, Mapping[str, Any]]) -> Dict[str, Any]:
+        question = value if isinstance(value, str) else str(value[question_key])
+        return client.answer(
+            question,
+            passages=passages_from_documents(retriever.invoke(question)),
+            model=model,
+            language=language,
+            tenant=tenant,
+        )
+
+    return RunnableLambda(run, name="wyrlo_answer_chain")

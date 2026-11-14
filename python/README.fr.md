@@ -81,6 +81,53 @@ res = engine.query("Quel est le délai de rétractation ?")
 Passages envoyés : identifiant (`Document.id` ou `node_id`), texte, source
 (`metadata["source"]`, ou `file_name` pour LlamaIndex) et score s'il existe.
 
+Deux autres pièces, pour ce que vous avez déjà et pour la réponse en un appel (préversion) :
+
+```python
+from wyrlo.langchain import answer_chain, output_verifier
+
+# Vérification de sortie seule : votre chaîne a déjà rédigé la réponse.
+res = output_verifier().invoke({"question": q, "answer": reponse, "documents": docs})
+
+# Moteur de questions : votre retriever, puis WYRLO rédige et vérifie (POST /v1/answer).
+out = answer_chain(retriever).invoke("Quel est le délai de rétractation ?")
+print(out["answer"] or "Je ne sais pas.", out["sentences"])
+```
+
+```python
+from wyrlo.llamaindex import AnswerQueryEngine, verify_response
+
+res = verify_response(q, query_engine.query(q))            # vérification de sortie seule
+out = AnswerQueryEngine(index.as_retriever()).query(q)     # POST /v1/answer
+```
+
+## La réponse en un appel (préversion)
+
+`answer()` fait rédiger la réponse par un modèle à partir des passages, WYRLO la vérifie
+toujours, et elle revient phrase par phrase avec sa confiance et ses sources, ou en « je ne
+sais pas » avec des pistes. Préversion : la route peut encore changer.
+
+```python
+out = wyrlo.answer("Combien de temps le moteur est-il garanti ?", read=lire_chez_vous)   # index sans copie
+out = wyrlo.answer("Combien de temps le moteur est-il garanti ?", passages=mes_passages)  # vos passages
+
+if out["decision"] == "answer":
+    for phrase in out["sentences"]:
+        print(phrase["text"], phrase["sources"])
+else:
+    print("Je ne sais pas.", out["leads"])
+```
+
+- Qui rédige : `model={"provider": "openai", "name": "...", "api_key": "..."}` (aussi
+  `anthropic`, `mistral`, `azure_openai` et `openai_compatible` avec `base_url`). Sans
+  `model` : le modèle enregistré pour le projet s'il y en a un, sinon le modèle géré par
+  WYRLO (Europe, après masquage des données personnelles). Avec votre modèle, le texte part
+  tel quel chez votre fournisseur.
+- La clé de votre fournisseur ne sert qu'à l'appel ; elle n'est jamais gardée, renvoyée ni
+  journalisée.
+- Aucune réponse n'a pu être rédigée (clé, requête ou modèle refusés, service
+  injoignable) : `WyrloError`.
+
 ## Pannes : jamais bloquant
 
 Panne réseau, délai dépassé (3 s au total par défaut, nouvelle tentative comprise) ou erreur 5xx :
@@ -97,7 +144,8 @@ Une clé absente ou refusée, ou une requête invalide, lève `WyrloError`
 ## Options
 
 ```python
-Wyrlo(api_key="wyr_live_…", base_url=None, timeout=3.0, max_retries=1, region=None, mask=None)
+Wyrlo(api_key="wyr_live_…", base_url=None, timeout=3.0, max_retries=1, region=None,
+      mask=None, locale=None)
 ```
 
 `base_url` : par défaut `WYRLO_BASE_URL`, sinon `DEFAULT_BASE_URL` (exporté par le
@@ -110,6 +158,9 @@ retombe aussi sur Paris). Chaque appel envoie l'en-tête `X-Region` : sans lui, 
 exécuterait la fonction dans la région la plus proche de votre serveur (par exemple
 `us-east-1`), alors que la question, les passages et la réponse y arrivent en clair,
 avant masquage. L'en-tête de réponse `x-sb-edge-region` confirme la région de traitement.
+
+`locale` : langue de `reason` et des messages d'erreur de l'API. Anglais par défaut ;
+`"fr"` pour le français (envoyé dans l'en-tête `Accept-Language`).
 
 ## Masquage côté client
 

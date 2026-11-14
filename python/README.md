@@ -32,7 +32,7 @@ if not res.should_answer:
 return res.answer  # cite res.kept_passages
 ```
 
-`res.reason` is a short explanation, currently in French.
+`res.reason` is a short explanation, in English (`locale="fr"` for French).
 
 Recommended: prepare the search with your settings' vocabulary, and pass the same request
 identifier to `guard`:
@@ -82,6 +82,52 @@ res = engine.query("What is the withdrawal period?")
 Passages sent: identifier (`Document.id` or `node_id`), text, source
 (`metadata["source"]`, or `file_name` for LlamaIndex) and score if any.
 
+Two more pieces, for what you already have and for the one-call answer (preview):
+
+```python
+from wyrlo.langchain import answer_chain, output_verifier
+
+# Output check only: your chain already wrote the answer.
+res = output_verifier().invoke({"question": q, "answer": answer, "documents": docs})
+
+# Question engine: your retriever, then WYRLO writes and verifies (POST /v1/answer).
+out = answer_chain(retriever).invoke("What is the withdrawal period?")
+print(out["answer"] or "I don't know.", out["sentences"])
+```
+
+```python
+from wyrlo.llamaindex import AnswerQueryEngine, verify_response
+
+res = verify_response(q, query_engine.query(q))            # output check only
+out = AnswerQueryEngine(index.as_retriever()).query(q)     # POST /v1/answer
+```
+
+## The answer in one call (preview)
+
+`answer()` has a model write the answer from the passages, WYRLO always verifies it, and
+the answer comes back sentence by sentence with its confidence and sources, or as "I don't
+know" with leads. Preview: the route may still change.
+
+```python
+out = wyrlo.answer("How long is the motor covered?", read=read_at_your_place)   # no-copy index
+out = wyrlo.answer("How long is the motor covered?", passages=my_passages)      # your passages
+
+if out["decision"] == "answer":
+    for sentence in out["sentences"]:
+        print(sentence["text"], sentence["sources"])
+else:
+    print("I don't know.", out["leads"])
+```
+
+- Who writes: `model={"provider": "openai", "name": "...", "api_key": "..."}` (also
+  `anthropic`, `mistral`, `azure_openai` and `openai_compatible` with `base_url`). Without
+  `model`: the model stored for the project if there is one, otherwise the WYRLO-managed
+  model (Europe, after masking personal data). With your model, the text goes as it is to
+  your provider.
+- Your provider key is only used for the call; it is never stored, returned or logged.
+- No answer could be written (key, request or model refused, service unreachable): raises
+  `WyrloError`.
+
 ## Outages: never blocking
 
 Network failure, timeout (3 s in total by default, retry included) or 5xx error: one retry
@@ -97,7 +143,8 @@ A missing or refused key, or an invalid request, raises `WyrloError`
 ## Options
 
 ```python
-Wyrlo(api_key="wyr_live_…", base_url=None, timeout=3.0, max_retries=1, region=None, mask=None)
+Wyrlo(api_key="wyr_live_…", base_url=None, timeout=3.0, max_retries=1, region=None,
+      mask=None, locale=None)
 ```
 
 `base_url`: default `WYRLO_BASE_URL`, otherwise `DEFAULT_BASE_URL` (exported by the
@@ -109,6 +156,9 @@ back to Paris). Each call sends the `X-Region` header: without it, Supabase woul
 function in the region closest to your server (for example `us-east-1`), while the
 question, passages and answer arrive there in clear, before masking. The
 `x-sb-edge-region` response header confirms the processing region.
+
+`locale`: language of `reason` and of the API error messages. English by default; `"fr"`
+for French (sent as the `Accept-Language` header).
 
 ## Client-side masking
 

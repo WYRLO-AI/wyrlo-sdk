@@ -55,7 +55,7 @@ __all__ = [
     "unmask_text",
 ]
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 API_VERSION = "2026-09-25"
 #: Adresse par défaut de l'API (``base_url`` ou variable d'environnement ``WYRLO_BASE_URL``).
 DEFAULT_BASE_URL = "https://api.wyrlo.io/functions/v1"
@@ -235,6 +235,9 @@ def _normalize_passages(passages: Sequence[PassageInput]) -> List[Dict[str, Any]
     return out
 
 
+#: Délai par défaut de ``answer`` (secondes) : un modèle rédige, c'est plus long.
+ANSWER_TIMEOUT = 60.0
+
 #: Champs de l'adresse d'un passage (mode B), dans les résultats de ``search``.
 ADDRESS_FIELDS = ("document", "version", "start", "length", "fingerprint")
 
@@ -320,6 +323,9 @@ class Wyrlo:
         qui reçoit tous les textes d'un appel et rend autant de textes masqués. Si le
         masquage échoue, rien n'est envoyé : réponse transmise sans vérification
         (``degraded``, étape « anonymize » sautée). Par défaut : désactivé.
+    :param locale: langue des messages et des raisons (``reason``) renvoyés par l'API :
+        ``"en"`` (anglais, par défaut) ou ``"fr"`` (français), par l'en-tête
+        Accept-Language.
     """
 
     def __init__(
@@ -330,13 +336,14 @@ class Wyrlo:
         max_retries: int = 1,
         region: Optional[str] = None,
         mask: Union[bool, Masker, None] = None,
+        locale: Optional[str] = None,
     ) -> None:
         key = api_key if api_key is not None else os.environ.get("WYRLO_API_KEY")
         if not key:
             raise WyrloError(
                 0,
                 "missing_api_key",
-                "Clé d'API manquante : passez api_key ou définissez WYRLO_API_KEY.",
+                "Missing API key: pass api_key or set WYRLO_API_KEY.",
             )
         self._api_key = key
         self._base_url = (
@@ -348,7 +355,7 @@ class Wyrlo:
             raise WyrloError(
                 0,
                 "insecure_base_url",
-                "Adresse de l'API refusée : https exigé (la clé partirait en clair).",
+                "API address refused: https required (the key would be sent in clear text).",
             )
         # Une valeur vide retombe sur Paris : ne jamais laisser la région au hasard.
         self._region = (
@@ -356,6 +363,8 @@ class Wyrlo:
             or os.environ.get("WYRLO_REGION", "").strip()
             or DEFAULT_REGION
         )
+        # Langue des messages et des raisons de l'API : anglais par défaut, « fr » sur demande.
+        self._language: Dict[str, str] = {"Accept-Language": locale} if locale else {}
         self._timeout = timeout
         self._max_retries = max(0, max_retries)
         self._mask: Union[bool, Masker] = mask or False
@@ -369,15 +378,19 @@ class Wyrlo:
         language: Optional[str] = None,
         request_id: Optional[str] = None,
         timeout: Optional[float] = None,
+        tenant: Optional[str] = None,
     ) -> GuardResult:
         """Vérifie une réponse de votre RAG.
+
+        ``tenant`` : client final pour lequel la vérification est faite (plateformes) ;
+        elle est alors comptée pour ce client.
 
         Donnez ``answer`` (la réponse de votre LLM) ou ``generate``, une fonction qui
         la produit à partir des passages. Ne lève jamais d'exception pour une panne de
         WYRLO ; lève ``WyrloError`` si la clé ou la requête sont invalides.
         """
         if (answer is None) == (generate is None):
-            raise ValueError("Donnez answer ou generate (l'un des deux).")
+            raise ValueError("Pass answer or generate (one of the two).")
         items = _normalize_passages(passages)
         text = (generate(items) if generate is not None else answer) or ""
         rid = request_id or str(uuid.uuid4())
@@ -399,8 +412,8 @@ class Wyrlo:
                     rid,
                     started,
                     language,
-                    "Masquage local en échec : rien n'a été envoyé à WYRLO, réponse "
-                    "transmise sans vérification.",
+                    "Local masking failed: nothing was sent to WYRLO, answer passed "
+                    "through without verification.",
                     list(_ALL_STEPS) + ["anonymize"],
                     None,
                 )
@@ -422,6 +435,8 @@ class Wyrlo:
         }
         if language:
             body["language"] = language
+        if tenant:
+            body["tenant"] = tenant
         payload = json.dumps(body).encode("utf-8")
 
         # Délai total : nouvelles tentatives comprises, jamais au-delà du délai.
@@ -450,9 +465,9 @@ class Wyrlo:
             rid,
             started,
             language,
-            "WYRLO momentanément surchargé : réponse transmise sans vérification."
+            "WYRLO temporarily overloaded: answer passed through without verification."
             if overloaded
-            else "WYRLO injoignable : réponse transmise sans vérification.",
+            else "WYRLO unreachable: answer passed through without verification.",
             list(_ALL_STEPS),
             local_masking,
         )
@@ -578,12 +593,12 @@ class Wyrlo:
         (changez la ``version`` si le titre change).
         """
         if (text is None) == (passages is None):
-            raise ValueError("Donnez text ou passages (l'un des deux).")
+            raise ValueError("Pass text or passages (one of the two).")
         if self._mask and not allow_unmasked:
             raise WyrloError(
                 0,
                 "mask_unsupported",
-                "Option mask active : index() n'envoie pas votre texte sans "
+                "mask option on: index() does not send your text without "
                 "allow_unmasked=True.",
             )
         body: Dict[str, Any] = {"version": version, "request_id": request_id or str(uuid.uuid4())}
@@ -625,7 +640,7 @@ class Wyrlo:
             raise WyrloError(
                 0,
                 "mask_unsupported",
-                "Option mask active : index_many() n'envoie pas votre texte sans "
+                "mask option on: index_many() does not send your text without "
                 "allow_unmasked=True.",
             )
         body: Dict[str, Any] = {
@@ -675,7 +690,7 @@ class Wyrlo:
         effacés. Lève ``WyrloError`` pour toute erreur, panne comprise.
         """
         if not tenant:
-            raise ValueError("tenant : identifiant attendu.")
+            raise ValueError("tenant: identifier expected.")
         return self._call_or_raise(
             "DELETE",
             "/guard/index" + _tenant_query(tenant),
@@ -724,6 +739,64 @@ class Wyrlo:
             return SearchResult(results=[], request_id=rid, degraded=True)
         return SearchResult(results=list(data["results"]), request_id=rid)
 
+    def answer(
+        self,
+        question: str,
+        read: Optional[Reader] = None,
+        passages: Optional[Sequence[PassageInput]] = None,
+        k: Optional[int] = None,
+        labels_any: Optional[Sequence[str]] = None,
+        keyword_hits: Optional[Sequence[str]] = None,
+        tenant: Optional[str] = None,
+        language: Optional[str] = None,
+        model: Optional[Mapping[str, Any]] = None,
+        request_id: Optional[str] = None,
+        timeout: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """La réponse complète en un appel (``POST /guard/answer``).
+
+        Un modèle rédige à partir des passages, WYRLO vérifie toujours, et la réponse
+        revient phrase par phrase (``sentences``) avec sa confiance et ses sources.
+        ``decision == "abstain"`` : « je ne sais pas », avec des pistes (``leads``).
+
+        Deux façons de donner les passages : ``read`` (WYRLO cherche dans l'index sans
+        copie, votre fonction relit chaque passage chez vous : WYRLO ne garde jamais le
+        texte) ou ``passages`` (vous les fournissez).
+
+        ``model`` : absent, le modèle enregistré pour le projet s'il y en a un, sinon le
+        modèle géré par WYRLO (Europe, après masquage) ; le vôtre :
+        ``{"provider": "openai", "name": "...", "api_key": "..."}`` (et ``base_url`` pour
+        ``azure_openai`` et ``openai_compatible``). La clé ne sert qu'à cet appel.
+
+        Lève ``WyrloError`` si la clé, la requête ou le modèle sont refusés, ou si le
+        service est injoignable : sans réponse rédigée, il n'y a rien à transmettre.
+        """
+        rid = request_id or str(uuid.uuid4())
+        if passages is None:
+            if read is None:
+                raise WyrloError(0, "invalid_request", "answer() needs `read` or `passages`.")
+            found = self.search(
+                question, k=k, labels_any=labels_any, keyword_hits=keyword_hits, tenant=tenant
+            )
+            sent = [p for p in passages_from_search(found.results, read) if p["text"].strip()]
+        else:
+            sent = _normalize_passages(passages)
+        body: Dict[str, Any] = {"question": question, "passages": sent, "request_id": rid}
+        if tenant:
+            body["tenant"] = tenant
+        if language:
+            body["language"] = language
+        if model:
+            body["model"] = {
+                key: model[key]
+                for key in ("provider", "name", "api_key", "base_url")
+                if model.get(key)
+            }
+        data = self._call_or_raise(
+            "POST", "/guard/answer", body, timeout if timeout is not None else ANSWER_TIMEOUT
+        )
+        return dict(data, request_id=rid)
+
     def _call_or_raise(
         self, method: str, path: str, body: Optional[Dict[str, Any]], timeout: float
     ) -> Dict[str, Any]:
@@ -732,8 +805,8 @@ class Wyrlo:
             raise WyrloError(
                 0,
                 "unavailable",
-                "WYRLO injoignable ou momentanément surchargé : rien n'a été fait, "
-                "réessayez plus tard.",
+                "WYRLO unreachable or temporarily overloaded: nothing was done, "
+                "try again later.",
             )
         return data
 
@@ -747,6 +820,7 @@ class Wyrlo:
             "X-Wyrlo-Api-Version": API_VERSION,
             # Le texte d'un document est traité à Paris, pas dans la région la plus proche.
             "X-Region": self._region,
+            **self._language,
         }
         data = None
         if body is not None:
@@ -771,7 +845,7 @@ class Wyrlo:
             raise WyrloError(
                 status,
                 err.get("code", "invalid_request"),
-                err.get("message", f"Requête refusée ({status})."),
+                err.get("message", f"Request refused ({status})."),
                 err.get("details"),
             ) from None
         except (urllib.error.URLError, OSError, ValueError):
@@ -789,6 +863,7 @@ class Wyrlo:
                 "X-Wyrlo-Api-Version": API_VERSION,
                 # Traitement du texte en clair à Paris, pas dans la région la plus proche.
                 "X-Region": self._region,
+                **self._language,
             },
         )
         try:
@@ -817,7 +892,7 @@ class Wyrlo:
                 raise WyrloError(
                     status,
                     err.get("code", "invalid_request"),
-                    err.get("message", f"Requête refusée ({status})."),
+                    err.get("message", f"Request refused ({status})."),
                     err.get("details"),
                 ) from None
             return None

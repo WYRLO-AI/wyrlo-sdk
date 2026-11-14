@@ -24,7 +24,7 @@ export const SERVER_VERSION = "0.1.2";
 export const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"] as const;
 
 /** Méthodes du SDK utilisées : un vrai client `Wyrlo`, ou un double pour les tests. */
-export type WyrloClient = Pick<Wyrlo, "guard" | "prepare" | "feedback" | "search">;
+export type WyrloClient = Pick<Wyrlo, "guard" | "prepare" | "feedback" | "search" | "answer">;
 
 /** Réglages du serveur, fixés à son lancement (jamais par l'agent). */
 export interface ServerOptions {
@@ -139,6 +139,22 @@ export const TOOLS: Tool[] = [
     annotations: { readOnlyHint: true, openWorldHint: true },
   },
   {
+    name: "wyrlo_answer",
+    title: "Write a verified answer",
+    description:
+      'Writes an answer from the passages you read, then verifies it: use it when you want WYRLO to both write and check the answer. Returns the answer sentence by sentence, each with its confidence and the passages it cites. decision "abstain": say you don\'t know (leads are given). The writing model is the one managed by WYRLO (Europe, after masking of personal data).',
+    inputSchema: {
+      type: "object",
+      properties: {
+        question: { type: "string" },
+        passages: { type: "array", items: PASSAGE_SCHEMA, minItems: 1 },
+        language: { type: "string", description: '"fr", "en"… (detected otherwise).' },
+      },
+      required: ["question", "passages"],
+    },
+    annotations: { readOnlyHint: true, openWorldHint: true },
+  },
+  {
     name: "wyrlo_feedback",
     title: "End-user feedback",
     description:
@@ -232,6 +248,16 @@ async function callTool(
         passages: passagesArg(args),
         ...(str(language) ? { language } : {}),
         ...(str(requestId) ? { requestId } : {}),
+      });
+      return textResult(out);
+    }
+    case "wyrlo_answer": {
+      const language = args.language;
+      const out = await client.answer({
+        question: needString(args, "question"),
+        passages: passagesArg(args),
+        ...(str(language) ? { language } : {}),
+        ...(options.tenant ? { tenant: options.tenant } : {}),
       });
       return textResult(out);
     }

@@ -70,7 +70,7 @@ const res = await wyrlo.guard({
 | `decision`              | `answer` or `abstain` ("I don't know")                                                                                  |
 | `confidence`            | `certain`, `probable`, `uncertain`, `unverified` (answer passed through without any check)                              |
 | `confidence_score`      | Consistency score of the answer (English), or score of the signals (other languages); null if nothing could be verified |
-| `reason`                | Short explanation (currently in French)                                                                                 |
+| `reason`                | Short explanation, in English (option `locale: "fr"` for French)                                                        |
 | `passages[].kept`       | Passages to cite; `injection: true` = set aside                                                                         |
 | `unsupported_sentences` | Sentences of the answer that no passage supports                                                                        |
 | `skipped_steps`         | Processing steps skipped on the WYRLO side (slow or unavailable server)                                                 |
@@ -81,6 +81,34 @@ const res = await wyrlo.guard({
 | `quota_exceeded`        | True if the monthly cap of the free tier is reached (1,000 analysed questions)                                          |
 | `settings_variant`      | During a partial test of the settings: `control` or `candidate`; null otherwise                                         |
 | `trace_id`              | Identifier of the trace in your WYRLO space (null if the question was not analysed)                                     |
+
+## The answer in one call (preview)
+
+`answer()` has a model write the answer from the passages, WYRLO always verifies it, and
+the answer comes back sentence by sentence with its confidence and sources, or as "I don't
+know" with leads. Preview: the route may still change.
+
+```ts
+// No-copy index: WYRLO searches, your function reads each passage at your place.
+const out = await wyrlo.answer({ question, read: (hit) => readAtYourPlace(hit) });
+// Or with passages you already have.
+const out2 = await wyrlo.answer({ question, passages });
+
+if (out.decision === "answer") {
+  for (const sentence of out.sentences) console.log(sentence.text, sentence.sources);
+} else {
+  console.log("I don't know.", out.leads);
+}
+```
+
+- Who writes: `model: { provider: "openai", name: "...", apiKey: "..." }` (also
+  `anthropic`, `mistral`, `azure_openai` and `openai_compatible` with `baseUrl`). Without
+  `model`: the model stored for the project if there is one, otherwise the WYRLO-managed
+  model (Europe, after masking personal data). With your model, the text goes as it is to
+  your provider.
+- Your provider key is only used for the call; it is never stored, returned or logged.
+- No answer could be written (key, request or model refused, service unreachable): throws
+  `WyrloError`.
 
 ## Outages: never blocking
 
@@ -105,6 +133,7 @@ new Wyrlo({
   timeoutMs: 3000, // in total, retry included
   maxRetries: 1,
   mask: false, // true: masking on your server before sending (see below)
+  locale: "en", // language of reason and API errors: "en" (default) or "fr"
 });
 ```
 
