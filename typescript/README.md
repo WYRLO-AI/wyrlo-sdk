@@ -246,6 +246,31 @@ Without `tenant`, everything happens in the project's default space. The limits 
 those of the project. Developer and Production plans (on the Free plan, a call with
 `tenant` is refused: 422 `invalid_request` on the `tenant` field).
 
+## Reading your documents (preview)
+
+`@wyrlo/sdk/documents` reads your files **on your machine** and cuts them along their
+structure; only the passages leave for the vectors, and WYRLO never keeps the text.
+
+```ts
+import { readDocument, splitDocument } from "@wyrlo/sdk/documents";
+
+const doc = await readDocument("prices.docx"); // also .pdf, .html, .md, .txt
+await wyrlo.index({
+  document: "prices.docx",
+  version: "2026-11",
+  passages: splitDocument(doc),
+  title: doc.title,
+});
+// Reading back for search() and answer(): doc.text.slice(start, start + length).
+```
+
+- Markdown, HTML, text and DOCX need no dependency (Node 18+). PDFs with text need
+  `pdfjs-dist` (`npm install pdfjs-dist`).
+- Each table row (Markdown, HTML, DOCX) is written with its headers, so a question about
+  one cell finds the whole row. A heading opens a passage and stays with what follows.
+- Not here: tables inside PDFs (read as plain lines), scanned PDFs, PPTX and XLSX. For
+  those, use the Python SDK (`pip install "wyrlo[documents]"`).
+
 ## API address
 
 By default, the SDK calls `DEFAULT_BASE_URL` (exported by the package):

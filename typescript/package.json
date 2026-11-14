@@ -28,6 +28,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./documents": {
+      "types": "./dist/documents.d.ts",
+      "default": "./dist/documents.js"
     }
   },
   "main": "./dist/index.js",
@@ -52,8 +56,17 @@
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
+    "pdfjs-dist": "^6.5.438",
     "typescript": "~5.9.3",
     "vitest": "^5.0.1"
+  },
+  "peerDependencies": {
+    "pdfjs-dist": ">=4"
+  },
+  "peerDependenciesMeta": {
+    "pdfjs-dist": {
+      "optional": true
+    }
   },
   "repository": {
     "type": "git",

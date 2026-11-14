@@ -251,6 +251,32 @@ await wyrlo.removeTenant("client-42"); // tout l'espace, tout de suite (fin de c
 Sans `tenant`, tout se passe dans l'espace par défaut du projet. Les limites restent
 celles du projet.
 
+## Lire vos documents (préversion)
+
+`@wyrlo/sdk/documents` lit vos fichiers **sur votre machine** et les découpe selon leur
+structure ; seuls les passages partent pour les vecteurs, et WYRLO ne garde jamais le texte.
+
+```ts
+import { readDocument, splitDocument } from "@wyrlo/sdk/documents";
+
+const doc = await readDocument("tarifs.docx"); // aussi .pdf, .html, .md, .txt
+await wyrlo.index({
+  document: "tarifs.docx",
+  version: "2026-11",
+  passages: splitDocument(doc),
+  title: doc.title,
+});
+// Relecture pour search() et answer() : doc.text.slice(start, start + length).
+```
+
+- Markdown, HTML, texte et DOCX se lisent sans dépendance (Node 18 ou plus). Les PDF avec
+  texte demandent `pdfjs-dist` (`npm install pdfjs-dist`).
+- Chaque ligne de tableau (Markdown, HTML, DOCX) est écrite avec ses en-têtes : une question
+  sur une cellule retrouve la ligne entière. Un titre ouvre un passage et reste avec la
+  suite.
+- Pas ici : les tableaux des PDF (lus comme de simples lignes), les PDF scannés, PPTX et
+  XLSX. Pour ceux-là, utilisez le SDK Python (`pip install "wyrlo[documents]"`).
+
 ## Adresse de l'API
 
 Par défaut, le SDK appelle `DEFAULT_BASE_URL` (exporté par le paquet) :

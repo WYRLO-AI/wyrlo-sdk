@@ -240,7 +240,9 @@ export type ApiErrorCode =
    * Index sans copie (mode B) coupé pour le projet de la clé (403) : les routes
    * `/guard/index/…` et `/guard/search` ne sont ouvertes que sur demande.
    */
-  | "index_disabled";
+  | "index_disabled"
+  /** Lecture des PDF scannés (`POST /guard/ocr`) coupée : réglage fermé par défaut (403). */
+  | "ocr_disabled";
 
 /** Limites de l'index sans copie (mode B, incrément 1). */
 export const INDEX_LIMITS = {
@@ -258,6 +260,8 @@ export const INDEX_LIMITS = {
   tenant: 100,
   /** Titre d'un document, placé en tête de chaque passage pour le calcul des vecteurs. */
   title: 300,
+  /** Contexte d'un passage (en-têtes de tableau, titre de section), pour les vecteurs seulement. */
+  context: 300,
   /** Documents par lot (`POST /guard/index/documents`), dans la limite du corps (512 Kio). */
   batchDocuments: 100,
   /** Par projet (sans prix pour l'instant). */
@@ -269,8 +273,12 @@ export const INDEX_LIMITS = {
 export interface IndexPutRequest {
   version: string;
   text?: string;
-  /** Passages découpés par vous ; `start` : position du passage dans votre document. */
-  passages?: { text: string; start: number }[];
+  /**
+   * Passages découpés par vous ; `start` : position du passage dans votre document.
+   * `context` (facultatif) : en-têtes de son tableau ou titre de sa section, placés devant
+   * le passage pour le calcul des vecteurs seulement, jamais conservés.
+   */
+  passages?: { text: string; start: number; context?: string }[];
   labels?: string[];
   /**
    * Titre du document (300 caractères au plus). Placé en tête de chaque passage pour le

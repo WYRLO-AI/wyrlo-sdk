@@ -50,7 +50,12 @@ class FakeApi:
                         "method": self.command,
                         "path": self.path,
                         "headers": dict(self.headers),
-                        "body": json.loads(raw) if raw else None,
+                        # Corps JSON, ou fichier envoyé tel quel (octets gardés).
+                        "body": (
+                            (json.loads(raw) if raw else None)
+                            if "json" in (self.headers.get("Content-Type") or "json")
+                            else raw
+                        ),
                     }
                 )
                 index = min(len(api.calls) - 1, len(api.responses) - 1)
@@ -764,6 +769,22 @@ class IndexTests(unittest.TestCase):
         self.assertEqual(out["decision"], "answer")
         self.assertEqual(out["sentences"][0]["sources"], ["cgv#11"])
         self.assertEqual(out["request_id"], sent["request_id"])
+
+    def test_ocr_envoie_le_fichier_tel_quel_et_rend_les_pages(self):
+        pages = {"pages": [{"index": 0, "markdown": "# Bon fictif"}], "pages_processed": 1,
+                 "model": "ocr-fictif"}
+        self.api.responses = [(200, pages, 0)]
+        out = self.client().ocr(b"%PDF-1.7 contenu fictif")
+        self.assertEqual(out["pages"][0]["markdown"], "# Bon fictif")
+        call = self.api.calls[0]
+        self.assertTrue(call["path"].endswith("/guard/ocr"))
+        self.assertEqual(call["headers"].get("Content-Type"), "application/pdf")
+        self.assertEqual(call["body"], b"%PDF-1.7 contenu fictif")
+        # Fermé par défaut côté service : l'erreur porte le code.
+        self.api.responses = [(403, {"error": {"code": "ocr_disabled", "message": "x"}}, 0)]
+        with self.assertRaises(WyrloError) as raised:
+            self.client().ocr(b"%PDF-1.7")
+        self.assertEqual(raised.exception.code, "ocr_disabled")
 
     def test_answer_avec_passages_et_modele_du_client_puis_refus(self):
         self.api.responses = [(200, {"decision": "abstain", "answer": None}, 0)]

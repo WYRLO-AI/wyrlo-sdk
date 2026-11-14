@@ -582,7 +582,8 @@ class Wyrlo:
         """Indexe un document (mode B) : ``PUT /guard/index/documents/{document}``.
 
         Donnez ``text`` (découpé par WYRLO) ou ``passages`` (``{"text", "start"}``, déjà
-        découpés). WYRLO masque, calcule les vecteurs, puis oublie le texte. La même
+        découpés ; ``context`` facultatif : en-têtes du tableau ou titre de la section,
+        placés devant le passage pour les vecteurs seulement, jamais conservés). WYRLO masque, calcule les vecteurs, puis oublie le texte. La même
         ``version`` déjà indexée répond « unchanged » sans rien recalculer ni compter.
         Lève ``WyrloError`` pour toute erreur, panne comprise (``unavailable``) : l'appel
         peut être refait sans risque. Avec l'option ``mask``, rien n'est envoyé sans
@@ -605,7 +606,14 @@ class Wyrlo:
         if text is not None:
             body["text"] = text
         else:
-            body["passages"] = [{"text": p["text"], "start": p["start"]} for p in passages or []]
+            body["passages"] = [
+                {
+                    "text": p["text"],
+                    "start": p["start"],
+                    **({"context": p["context"]} if p.get("context") else {}),
+                }
+                for p in passages or []
+            ]
         if title:
             body["title"] = title
         if labels:
@@ -797,6 +805,36 @@ class Wyrlo:
         )
         return dict(data, request_id=rid)
 
+    def ocr(self, pdf: Union[bytes, str], timeout: Optional[float] = None) -> Dict[str, Any]:
+        """Lit un PDF scanné (images sans texte) : ``POST /guard/ocr``, préversion.
+
+        ``pdf`` : les octets du fichier, ou son chemin. 4 Mo au plus. La route est fermée
+        par défaut (``WyrloError`` 403, code ``ocr_disabled``). Le fichier part tel quel au
+        modèle de lecture (Mistral, point d'accès européen) : une image ne se masque pas.
+        WYRLO ne garde ni le fichier ni le texte. Rend ``{"pages": [{"index", "markdown"}],
+        "pages_processed", "model"}`` ; indexez ensuite le texte vous-même
+        (``wyrlo.documents.blocks_from_markdown``, puis ``index(passages=…)``).
+        Lève ``WyrloError`` pour toute erreur, panne comprise.
+        """
+        if isinstance(pdf, str):
+            with open(pdf, "rb") as handle:
+                pdf = handle.read()
+        data = self._call(
+            "POST",
+            "/guard/ocr",
+            None,
+            timeout if timeout is not None else ANSWER_TIMEOUT,
+            raw=bytes(pdf),
+            content_type="application/pdf",
+        )
+        if not isinstance(data, dict):
+            raise WyrloError(
+                0,
+                "unavailable",
+                "WYRLO unreachable or temporarily overloaded: nothing was read, try again later.",
+            )
+        return data
+
     def _call_or_raise(
         self, method: str, path: str, body: Optional[Dict[str, Any]], timeout: float
     ) -> Dict[str, Any]:
@@ -811,9 +849,16 @@ class Wyrlo:
         return data
 
     def _call(
-        self, method: str, path: str, body: Optional[Dict[str, Any]], timeout: float
+        self,
+        method: str,
+        path: str,
+        body: Optional[Dict[str, Any]],
+        timeout: float,
+        raw: Optional[bytes] = None,
+        content_type: str = "application/json",
     ) -> Optional[Dict[str, Any]]:
-        """Appel simple (routes de l'index) : None si WYRLO est injoignable ou en panne."""
+        """Appel simple (routes de l'index) : None si WYRLO est injoignable ou en panne.
+        ``raw`` : un fichier envoyé tel quel (``content_type``), à la place d'un corps JSON."""
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "X-Wyrlo-Sdk": f"python/{__version__}",
@@ -823,7 +868,10 @@ class Wyrlo:
             **self._language,
         }
         data = None
-        if body is not None:
+        if raw is not None:
+            headers["Content-Type"] = content_type
+            data = raw
+        elif body is not None:
             headers["Content-Type"] = "application/json"
             data = json.dumps(body).encode("utf-8")
         request = urllib.request.Request(

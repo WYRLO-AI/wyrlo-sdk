@@ -265,6 +265,39 @@ wyrlo.index_stats()  # chiffres seulement, aucun identifiant
 - Limites : 5 000 documents (500 sur l'offre Gratuit) et 100 000 passages par projet ; 2 000 passages et
   400 000 caractères par document.
 
+### Lire vos documents (préversion)
+
+`wyrlo.documents` lit vos fichiers **sur votre machine** et les découpe selon leur
+structure ; seuls les passages partent pour les vecteurs, et WYRLO ne garde jamais le texte.
+
+```bash
+pip install "wyrlo[documents]"   # pdfplumber, python-docx, python-pptx, openpyxl (MIT)
+```
+
+```python
+from wyrlo.documents import read_document, split_document
+
+doc = read_document("tarifs.pdf")          # aussi .docx, .pptx, .xlsx, .html, .md, .txt
+wyrlo.index("tarifs.pdf", version="2026-11", passages=split_document(doc), title=doc.title)
+
+# Relecture pour search() et answer() : gardez doc.text chez vous (ou relisez le fichier) ;
+# chaque passage est la tranche doc.text[start:start + length].
+textes = {"tarifs.pdf": doc.text}
+out = wyrlo.answer(
+    "Combien de temps le moteur du Route 500 est-il garanti ?",
+    read=lambda document, version, start, length: textes[document][start : start + length],
+)
+```
+
+- Chaque ligne de tableau est écrite avec ses en-têtes (`Modèle : Route 500 | Prix :
+2 190 € | Garantie du moteur : 3 ans`) : une question sur une cellule retrouve la ligne
+  entière.
+- Un titre ouvre un passage et reste avec le texte qui le suit ; une ligne de tableau n'est
+  jamais coupée ; un long paragraphe est coupé à une fin de phrase.
+- Markdown, HTML et texte se lisent sans bibliothèque supplémentaire.
+- Non lus ici : les PDF scannés (images sans texte). Les PDF à plusieurs colonnes et les
+  tableaux sans traits peuvent mal se lire : essayez sur vos documents.
+
 ### Un espace par client final (mode C, plateformes)
 
 Offres Développeur et Production (sur l'offre Gratuit, un appel avec `tenant` est refusé :

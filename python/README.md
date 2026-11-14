@@ -262,6 +262,38 @@ wyrlo.index_stats()  # figures only, no identifier
 - Limits: 5,000 documents (500 on the Free plan) and 100,000 passages per project; 2,000 passages and 400,000
   characters per document.
 
+### Reading your documents (preview)
+
+`wyrlo.documents` reads your files **on your machine** and cuts them along their structure;
+only the passages leave for the vectors, and WYRLO never keeps the text.
+
+```bash
+pip install "wyrlo[documents]"   # pdfplumber, python-docx, python-pptx, openpyxl (MIT)
+```
+
+```python
+from wyrlo.documents import read_document, split_document
+
+doc = read_document("prices.pdf")          # also .docx, .pptx, .xlsx, .html, .md, .txt
+wyrlo.index("prices.pdf", version="2026-11", passages=split_document(doc), title=doc.title)
+
+# Reading back for search() and answer(): keep doc.text at your place (or read the file
+# again); each passage is the slice doc.text[start:start + length].
+texts = {"prices.pdf": doc.text}
+out = wyrlo.answer(
+    "How long is the Route 500 motor covered?",
+    read=lambda document, version, start, length: texts[document][start : start + length],
+)
+```
+
+- Each table row is written with its headers (`Model : Route 500 | Price : 2 190 € | Motor
+warranty : 3 years`), so a question about one cell finds the whole row.
+- A heading opens a passage and stays with the text that follows; a table row is never cut;
+  a long paragraph is cut at the end of a sentence.
+- Markdown, HTML and plain text need no extra library.
+- Not read here: scanned PDFs (images without text). Multi-column PDFs and tables without
+  borders may read poorly: try it on your documents.
+
 ### One space per end customer (mode C, platforms)
 
 If you offer an assistant to your own customers, store each customer's documents in their

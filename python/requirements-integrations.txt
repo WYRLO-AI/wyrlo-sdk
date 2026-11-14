@@ -8,3 +8,8 @@
 #     -o packages/sdk-python/requirements-integrations.lock.txt
 langchain-core==1.6.6
 llama-index-core==0.14.25
+# Lecture des documents (wyrlo[documents], chantier 6) : licences MIT, voir docs/licences.md.
+pdfplumber==0.11.10
+python-docx==1.2.0
+python-pptx==1.0.2
+openpyxl==3.1.5

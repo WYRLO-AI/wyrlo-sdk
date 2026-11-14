@@ -13,6 +13,13 @@ Not published on any registry. Interfaces may still change.
 - `tenant` on `guard()`: the end customer a verification is made for (platforms).
 - `wyrlo` (Python): `output_verifier` and `answer_chain` for LangChain, `verify_response`
   and `AnswerQueryEngine` for LlamaIndex.
+- Reading your documents on your machine, then cutting them along their structure:
+  `wyrlo.documents` in Python (PDF with tables, DOCX, PPTX, XLSX, HTML, Markdown; extra
+  `wyrlo[documents]`), `@wyrlo/sdk/documents` in TypeScript (Markdown, HTML, DOCX, PDF with
+  text). Each table row carries its headers.
+- `context` on the passages you index: the table headers or section title of a passage,
+  used for the vectors only.
+- `ocr()` in `wyrlo` (Python): reads a scanned PDF. The service route is closed by default.
 - New preview folders: `go/`, `php/`, `java/`, `csharp/` (clients generated from the
   OpenAPI specification, see `PREVIEW.md`; the C# client has not been compiled yet) and
   `n8n/` (n8n node, not yet run in a real n8n).
