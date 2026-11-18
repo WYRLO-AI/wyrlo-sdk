@@ -697,6 +697,84 @@ describe("index sans copie (mode B)", () => {
     expect(calls[0]?.body.text).toBe("x");
   });
 
+  it("gaps : rapport de lacunes, période et client final dans l'adresse", async () => {
+    const report = {
+      days: 7,
+      tenant: "client-1",
+      total_questions: 3,
+      gaps: [
+        {
+          topic: "Garantie",
+          questions: 3,
+          end_clients: 1,
+          first_seen: "2026-11-10",
+          last_seen: "2026-11-13",
+          examples: [],
+          suggestion: "Add a document that covers “Garantie”.",
+        },
+      ],
+    };
+    const { impl, calls } = fakeFetch([json(200, report), json(200, { ...report, tenant: null })]);
+    const wyrlo = new Wyrlo({ apiKey: KEY, fetch: impl });
+    expect((await wyrlo.gaps({ days: 7, tenant: "client-1" })).gaps[0]?.topic).toBe("Garantie");
+    expect(calls[0]?.init.method).toBe("GET");
+    expect(calls[0]?.url).toBe(`${DEFAULT_BASE_URL}/guard/gaps?days=7&tenant=client-1`);
+    await wyrlo.gaps();
+    expect(calls[1]?.url).toBe(`${DEFAULT_BASE_URL}/guard/gaps`);
+  });
+
+  it("quality : rapport hebdomadaire, semaines et client final dans l'adresse", async () => {
+    const report = { weeks: 4, tenant: null, first_trace_at: null, periods: [] };
+    const { impl, calls } = fakeFetch([json(200, report), json(200, report)]);
+    const wyrlo = new Wyrlo({ apiKey: KEY, fetch: impl });
+    expect((await wyrlo.quality({ weeks: 4, tenant: "client-1" })).weeks).toBe(4);
+    expect(calls[0]?.url).toBe(`${DEFAULT_BASE_URL}/guard/quality?weeks=4&tenant=client-1`);
+    await wyrlo.quality();
+    expect(calls[1]?.url).toBe(`${DEFAULT_BASE_URL}/guard/quality`);
+  });
+
+  it("regression : lots de 25 questions enchaînés, statistiques cumulées par `carry`", async () => {
+    const version = { answer: "Deux ans.", passages: [{ text: "Garantie de 2 ans." }] };
+    const cases = Array.from({ length: 30 }, () => ({ question: "Q ?", a: version, b: version }));
+    const outcome = { decision: "answer", confidence: "certain", ok: true };
+    const batch = (ids: number[], table: object, compared: number) =>
+      json(200, {
+        cases: ids.map((id) => ({
+          id: String(id),
+          expected: "answer",
+          a: outcome,
+          b: outcome,
+          change: "same",
+        })),
+        skipped: 0,
+        verifications: ids.length * 2,
+        table,
+        stats: { compared, verdict: "no_significant_difference" },
+      });
+    const first = { both_ok: 25, regressions: 0, fixes: 0, both_failed: 0 };
+    const { impl, calls } = fakeFetch([
+      batch(
+        Array.from({ length: 25 }, (_, i) => i + 1),
+        first,
+        25,
+      ),
+      batch([26, 27, 28, 29, 30], { ...first, both_ok: 30 }, 30),
+    ]);
+    const wyrlo = new Wyrlo({ apiKey: KEY, fetch: impl });
+    const result = await wyrlo.regression(cases);
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.url).toBe(`${DEFAULT_BASE_URL}/guard/regression`);
+    const sent = calls.map((c) => JSON.parse(String(c.init.body)));
+    expect(sent[0].cases).toHaveLength(25);
+    expect(sent[0].carry).toBeUndefined();
+    expect(sent[1].cases.map((c: { id: string }) => c.id)).toEqual(["26", "27", "28", "29", "30"]);
+    expect(sent[1].carry).toEqual(first);
+    expect(result.cases).toHaveLength(30);
+    expect(result).toMatchObject({ verifications: 60, skipped: 0, table: { both_ok: 30 } });
+    expect(result.stats.compared).toBe(30);
+    await expect(wyrlo.regression([])).rejects.toMatchObject({ code: "invalid_request" });
+  });
+
   it("remove et indexStats : DELETE et GET sans corps", async () => {
     const { impl, calls } = fakeFetch([
       json(200, { document: "d", deleted: true }),

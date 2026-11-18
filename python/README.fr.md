@@ -183,10 +183,37 @@ proche), adresses IP, numéros de passeport et de carte d'identité (avec un mot
 adresses postales (numéro et type de voie), clés d'API et jetons reconnaissables. Une
 même valeur reçoit la même marque dans la question, la réponse et les passages.
 
-**Non masqués** : les noms de personnes et d'entreprises, les adresses sans numéro ni type
-de voie (lieu-dit), et tout identifiant sans forme reconnaissable. Les dates, montants et numéros de commande restent aussi : la
-vérification doit pouvoir les comparer. Pour les noms, passez votre propre fonction, par
-exemple Presidio installé sur votre machine (rien n'en sort) :
+**Non masqués par les règles** : les noms de personnes et d'entreprises, les adresses sans
+numéro ni type de voie (lieu-dit), et tout identifiant sans forme reconnaissable. Les
+dates, montants et numéros de commande restent aussi : la vérification doit pouvoir les
+comparer.
+
+### Noms de personnes (préversion)
+
+Un nom n'a pas de forme fixe : il faut un modèle de langue pour le trouver. Le SDK peut en
+faire tourner un **sur votre machine**, avec une bibliothèque gratuite (spaCy,
+facultative) :
+
+```bash
+pip install "wyrlo[names]"
+python -m spacy download fr_core_news_md   # ou le modèle de votre langue
+```
+
+```python
+from wyrlo import Wyrlo
+from wyrlo.names import spacy_names
+
+wyrlo = Wyrlo(mask={"names": spacy_names("fr_core_news_md")})
+# Règles comme avec mask=True, plus les noms en [PERSONNE_1], [PERSONNE_2]…
+```
+
+Ce qu'il faut en attendre : un modèle se trompe. Sur notre petit jeu fictif (20 phrases en
+français, 18 noms), `fr_core_news_md` a trouvé 14 noms entiers, 3 en partie et en a manqué
+1, sans rien masquer à tort. C'est une mesure sur des phrases courtes et propres, pas une
+garantie : mesurez sur vos textes. Les noms d'entreprises et de lieux ne sont pas masqués.
+
+Pour aller plus loin, passez votre propre fonction, par exemple Presidio installé sur votre
+machine (rien n'en sort) :
 
 ```python
 from presidio_analyzer import AnalyzerEngine

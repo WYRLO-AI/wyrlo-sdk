@@ -180,10 +180,41 @@ addresses, passport and identity card numbers (with a keyword), postal addresses
 and street type), recognisable API keys and tokens. The same value gets the same marker in
 the question, the answer and the passages.
 
-**Not masked**: names of people and companies, addresses without a number or street type,
-and any identifier without a recognisable shape. Dates, amounts and order numbers stay
-too: verification must be able to compare them. For names, pass your own function, for
-example Presidio installed on your machine (nothing leaves it):
+**Not masked by the rules**: names of people and companies, addresses without a number or
+street type, and any identifier without a recognisable shape. Dates, amounts and order
+numbers stay too: verification must be able to compare them.
+
+### Names of people (preview)
+
+A name has no fixed shape: finding it takes a language model. The SDK can run one **on
+your machine**, with a free library (spaCy, optional):
+
+```bash
+pip install "wyrlo[names]"
+python -m spacy download fr_core_news_md   # or the model of your language
+```
+
+```python
+from wyrlo import Wyrlo
+from wyrlo.names import spacy_names
+
+wyrlo = Wyrlo(mask={"names": spacy_names("fr_core_news_md")})
+# Rules as with mask=True, plus names as [PERSONNE_1], [PERSONNE_2]…
+# res.local_masking: LocalMasking(method="rules+names", counts={"EMAIL": 1, "PERSONNE": 3})
+```
+
+A name recognised once is masked everywhere in the call, and the real values are put back
+in what the SDK returns.
+
+What to expect, honestly: a model makes mistakes. On our small fictional set (20 French
+sentences, 18 names), `fr_core_news_md` found 14 names in full, 3 in part and missed 1,
+with nothing masked by mistake; the small model (`fr_core_news_sm`) found 11 in full and
+missed 4. This is one measurement on short, clean sentences, not a guarantee: measure on
+your own texts. Company and place names are not masked. You can plug in another detector:
+any function that returns the `(start, end)` positions of the names in a text.
+
+To go further, pass your own function, for example Presidio installed on your machine
+(nothing leaves it):
 
 ```python
 from presidio_analyzer import AnalyzerEngine

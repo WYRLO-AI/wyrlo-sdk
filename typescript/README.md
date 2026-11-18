@@ -157,10 +157,37 @@ card numbers (with a keyword), postal addresses (number and street type), recogn
 keys and tokens. The same value gets the same marker in the question, the answer and the
 passages: verification stays exact.
 
-**Not masked**: names of people and companies, addresses without a number or street type,
-and any identifier without a recognisable shape (internal customer number…). Dates,
-amounts and order numbers stay too: verification must be able to compare them. To go
-further, pass your own function, for example a name-detection model running on your side:
+**Not masked by the rules**: names of people and companies, addresses without a number or
+street type, and any identifier without a recognisable shape (internal customer number…).
+Dates, amounts and order numbers stay too: verification must be able to compare them.
+
+### Names of people (preview)
+
+A name has no fixed shape: finding it takes a language model. The SDK can run one **on
+your machine**, with a free library (`npm install @huggingface/transformers`, optional):
+
+```ts
+import { Wyrlo } from "@wyrlo/sdk";
+import { transformersNames } from "@wyrlo/sdk/names";
+
+const wyrlo = new Wyrlo({ mask: { names: transformersNames() } });
+// Rules as with `mask: true`, plus names as [PERSONNE_1], [PERSONNE_2]…
+// res.local_masking: { method: "rules+names", counts: { EMAIL: 1, PERSONNE: 3 } }
+```
+
+On first use the library downloads the model file from Hugging Face (no text is sent),
+then keeps it in its cache. A name recognised once is masked everywhere in the call, and
+the real values are put back in what the SDK returns.
+
+What to expect, honestly: a model makes mistakes. On our small fictional set (34
+sentences in French, English, German, Spanish and Italian, 28 names) the default model
+found 26 names in full, one in part ("de La Fontaine" without "de") and missed one written
+without capitals; it masked nothing by mistake. This is one measurement on short, clean
+sentences, not a guarantee: measure on your own texts. Company and place names are not
+masked. You can plug in another detector: any function that returns the positions of the
+names in a text (`NameFinder`).
+
+To go further, pass your own function:
 
 ```ts
 const wyrlo = new Wyrlo({

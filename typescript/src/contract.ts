@@ -1,7 +1,8 @@
 /**
  * Contrat public de l'API d'ingestion WYRLO (POST /guard).
  *
- * Le service WYRLO applique ce même contrat ; toute évolution est versionnée (API_VERSION).
+ * COPIE de supabase/functions/_shared/contract.ts : un test vérifie que les deux
+ * fichiers restent identiques (hors cet en-tête).
  */
 
 export const API_VERSION = "2026-09-25";
@@ -460,4 +461,137 @@ export interface AnswerResponse {
   usage: { input_tokens: number; output_tokens: number };
   /** Vérification incomplète ou sautée (mode dégradé) : la réponse reste transmise. */
   degraded: boolean;
+}
+
+/** GET /guard/gaps : un sujet demandé et absent des documents. */
+export interface Gap {
+  topic: string;
+  /** Questions sur ce sujet pendant la période. */
+  questions: number;
+  /** Clients finaux différents qui l'ont demandé. */
+  end_clients: number;
+  /** Premier et dernier jour (UTC, AAAA-MM-JJ) où le sujet a été demandé sur la période. */
+  first_seen: string;
+  last_seen: string;
+  /** Questions d'exemple ; toujours vide dans le rapport d'un client final. */
+  examples: string[];
+  /** Document à ajouter, dans la langue de l'appel. */
+  suggestion: string;
+}
+
+/** GET /guard/gaps : rapport de lacunes, du sujet le plus demandé au moins demandé. */
+export interface GapsReport {
+  days: number;
+  /** Client final du rapport ; null : tout le projet. */
+  tenant: string | null;
+  total_questions: number;
+  gaps: Gap[];
+}
+
+/** GET /guard/quality : une semaine du rapport de qualité (lundi à dimanche, UTC). */
+export interface QualityWeek {
+  week_start: string;
+  week_end: string;
+  /** Faux pour la semaine en cours, encore incomplète. */
+  complete: boolean;
+  questions: number;
+  answered: number;
+  abstained: number;
+  unverified: number;
+  injections: number;
+  certain: number;
+  probable: number;
+  uncertain: number;
+  helpful: number;
+  unhelpful: number;
+}
+
+/** GET /guard/quality : rapport de qualité hebdomadaire, de la semaine la plus récente à la plus ancienne. */
+export interface QualityReport {
+  weeks: number;
+  /** Client final du rapport ; null : tout le projet. */
+  tenant: string | null;
+  /** Plus ancienne question conservée : les semaines d'avant sont vides faute de données. */
+  first_trace_at: string | null;
+  periods: QualityWeek[];
+}
+
+/** POST /guard/regression : ce qu'une version de votre RAG a produit pour une question. */
+export interface RegressionVersionInput {
+  answer?: string;
+  passages: GuardPassageInput[];
+}
+
+/** POST /guard/regression : une question du jeu de référence, et ses deux versions. */
+export interface RegressionCase {
+  /** Identifiant dans votre jeu (par défaut, la position). */
+  id?: string;
+  question: string;
+  /** Ce qu'un bon RAG doit faire : répondre (par défaut) ou s'abstenir. */
+  expected?: "answer" | "abstain";
+  a: RegressionVersionInput;
+  b: RegressionVersionInput;
+}
+
+/** Tableau des paires : à renvoyer dans `carry` pour cumuler les lots. */
+export interface RegressionTable {
+  both_ok: number;
+  regressions: number;
+  fixes: number;
+  both_failed: number;
+}
+
+export interface RegressionRequest {
+  /** 25 questions au plus par appel. */
+  cases: RegressionCase[];
+  carry?: RegressionTable;
+}
+
+export interface RegressionVersionOutcome {
+  decision: Decision;
+  confidence: Confidence;
+  ok: boolean;
+}
+
+export interface RegressionCaseResult {
+  id: string;
+  expected: "answer" | "abstain";
+  /** null : cette version n'a pas pu être vérifiée. */
+  a: RegressionVersionOutcome | null;
+  b: RegressionVersionOutcome | null;
+  /** null : question écartée de la comparaison. */
+  change: "same" | "regression" | "fix" | null;
+}
+
+export interface RegressionRate {
+  ok: number;
+  /** Taux en pourcentage. */
+  rate: number | null;
+  /** Intervalle de confiance à 95 % (Wilson), en pourcentage. */
+  ci: [number, number] | null;
+}
+
+export interface RegressionStats {
+  compared: number;
+  a: RegressionRate;
+  b: RegressionRate;
+  /** Écart B − A en points, avec son intervalle de confiance à 95 %. */
+  difference: { points: number; ci: [number, number] } | null;
+  regressions: number;
+  fixes: number;
+  /** Test exact de McNemar, bilatéral. */
+  p_value: number;
+  /** « regression » ou « improvement » seulement si p < 0,05. */
+  verdict: "regression" | "improvement" | "no_significant_difference";
+  /** Jeu petit ou trop peu de désaccords : un écart réel peut rester invisible. */
+  small_sample: boolean;
+}
+
+export interface RegressionResponse {
+  cases: RegressionCaseResult[];
+  skipped: number;
+  /** Vérifications faites par cet appel, comptées au quota. */
+  verifications: number;
+  table: RegressionTable;
+  stats: RegressionStats;
 }

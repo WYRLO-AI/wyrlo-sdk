@@ -160,10 +160,36 @@ de passeport et de carte d'identité (avec un mot-clé), adresses postales (num�
 de voie), clés d'API et jetons reconnaissables. Une même valeur reçoit la même marque
 dans la question, la réponse et les passages : la vérification reste exacte.
 
-**Non masqués** : les noms de personnes et d'entreprises, les adresses sans numéro ni type
-de voie (lieu-dit), et tout identifiant sans forme reconnaissable (numéro client interne…). Les dates, montants et numéros de commande
-restent aussi : la vérification doit pouvoir les comparer. Pour aller plus loin, passez
-votre propre fonction, par exemple un modèle de détection des noms qui tourne chez vous :
+**Non masqués par les règles** : les noms de personnes et d'entreprises, les adresses sans
+numéro ni type de voie (lieu-dit), et tout identifiant sans forme reconnaissable (numéro
+client interne…). Les dates, montants et numéros de commande restent aussi : la
+vérification doit pouvoir les comparer.
+
+### Noms de personnes (préversion)
+
+Un nom n'a pas de forme fixe : il faut un modèle de langue pour le trouver. Le SDK peut en
+faire tourner un **sur votre machine**, avec une bibliothèque gratuite
+(`npm install @huggingface/transformers`, facultatif) :
+
+```ts
+import { Wyrlo } from "@wyrlo/sdk";
+import { transformersNames } from "@wyrlo/sdk/names";
+
+const wyrlo = new Wyrlo({ mask: { names: transformersNames() } });
+// Règles comme avec `mask: true`, plus les noms en [PERSONNE_1], [PERSONNE_2]…
+```
+
+Au premier appel, la bibliothèque télécharge le fichier du modèle depuis Hugging Face
+(aucun texte n'est envoyé), puis le garde en cache. Un nom reconnu une fois est masqué
+partout dans l'appel, et les vraies valeurs sont remises dans ce que le SDK vous rend.
+
+Ce qu'il faut en attendre : un modèle se trompe. Sur notre petit jeu fictif (34 phrases en
+cinq langues, 28 noms), le modèle par défaut a trouvé 26 noms entiers, un en partie, et en a
+manqué un écrit sans majuscules ; il n'a rien masqué à tort. C'est une mesure sur des
+phrases courtes et propres, pas une garantie : mesurez sur vos textes. Les noms
+d'entreprises et de lieux ne sont pas masqués.
+
+Pour aller plus loin, passez votre propre fonction :
 
 ```ts
 const wyrlo = new Wyrlo({

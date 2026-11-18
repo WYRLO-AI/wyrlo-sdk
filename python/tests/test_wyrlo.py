@@ -665,6 +665,49 @@ class IndexTests(unittest.TestCase):
         self.client(mask=True).index("d", "v1", text="x", allow_unmasked=True)
         self.assertEqual(self.api.calls[0]["body"]["text"], "x")
 
+    def test_gaps_rapport_de_lacunes(self):
+        report = {"days": 7, "tenant": "client-1", "total_questions": 3, "gaps": [{"topic": "Garantie", "questions": 3}]}
+        self.api.responses = [(200, report, 0), (200, dict(report, tenant=None), 0)]
+        wyrlo = self.client()
+        self.assertEqual(wyrlo.gaps(days=7, tenant="client-1")["gaps"][0]["topic"], "Garantie")
+        self.assertEqual(self.api.calls[0]["method"], "GET")
+        self.assertEqual(self.api.calls[0]["path"], "/v1/guard/gaps?days=7&tenant=client-1")
+        wyrlo.gaps()
+        self.assertEqual(self.api.calls[1]["path"], "/v1/guard/gaps")
+
+    def test_quality_rapport_hebdomadaire(self):
+        report = {"weeks": 4, "tenant": None, "first_trace_at": None, "periods": []}
+        self.api.responses = [(200, report, 0), (200, report, 0)]
+        wyrlo = self.client()
+        self.assertEqual(wyrlo.quality(weeks=4, tenant="client-1")["weeks"], 4)
+        self.assertEqual(self.api.calls[0]["path"], "/v1/guard/quality?weeks=4&tenant=client-1")
+        wyrlo.quality()
+        self.assertEqual(self.api.calls[1]["path"], "/v1/guard/quality")
+
+    def test_regression_lots_de_25(self):
+        version = {"answer": "Deux ans.", "passages": [{"text": "Garantie de 2 ans."}]}
+        cases = [{"question": "Q ?", "a": version, "b": version} for _ in range(30)]
+        first = {"both_ok": 25, "regressions": 0, "fixes": 0, "both_failed": 0}
+
+        def batch(n, table, compared):
+            return {"cases": [{"id": str(i)} for i in range(n)], "skipped": 0, "verifications": 2 * n,
+                    "table": table, "stats": {"compared": compared}}
+
+        self.api.responses = [(200, batch(25, first, 25), 0), (200, batch(5, dict(first, both_ok=30), 30), 0)]
+        wyrlo = self.client()
+        result = wyrlo.regression(cases)
+        self.assertEqual(len(self.api.calls), 2)
+        self.assertEqual(self.api.calls[0]["path"], "/v1/guard/regression")
+        self.assertEqual(len(self.api.calls[0]["body"]["cases"]), 25)
+        self.assertNotIn("carry", self.api.calls[0]["body"])
+        self.assertEqual([c["id"] for c in self.api.calls[1]["body"]["cases"]], ["26", "27", "28", "29", "30"])
+        self.assertEqual(self.api.calls[1]["body"]["carry"], first)
+        self.assertEqual(len(result["cases"]), 30)
+        self.assertEqual(result["verifications"], 60)
+        self.assertEqual(result["stats"]["compared"], 30)
+        with self.assertRaises(WyrloError):
+            wyrlo.regression([])
+
     def test_remove_et_index_stats(self):
         self.api.responses = [
             (200, {"document": "d", "deleted": True}, 0),

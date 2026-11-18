@@ -1,0 +1,159 @@
+{
+  "note": "Jeu fictif pour mesurer la détection des noms de personnes côté client. Chaque cas : un texte et les noms attendus. Personnes inventées.",
+  "cas": [
+    {
+      "langue": "fr",
+      "texte": "Bonjour, je suis Camille Durand et j'appelle au sujet de ma commande 48213.",
+      "noms": ["Camille Durand"]
+    },
+    {
+      "langue": "fr",
+      "texte": "Le dossier a été transmis à Jean-Pierre Lefèvre, qui vous rappellera lundi.",
+      "noms": ["Jean-Pierre Lefèvre"]
+    },
+    {
+      "langue": "fr",
+      "texte": "Mme Nadia Benali demande un remboursement de 120 euros.",
+      "noms": ["Nadia Benali"]
+    },
+    {
+      "langue": "fr",
+      "texte": "Selon le contrat signé par M. Olivier Marchand le 3 mars, le préavis est de deux mois.",
+      "noms": ["Olivier Marchand"]
+    },
+    {
+      "langue": "fr",
+      "texte": "Pouvez-vous confirmer le rendez-vous de Thi Hoa Nguyen avec le docteur Roussel ?",
+      "noms": ["Thi Hoa Nguyen", "Roussel"]
+    },
+    {
+      "langue": "fr",
+      "texte": "La facture est au nom de Sophie Petit, 12 rue des Lilas.",
+      "noms": ["Sophie Petit"]
+    },
+    {
+      "langue": "fr",
+      "texte": "Mon responsable, Mamadou Diallo, a validé la demande de congé.",
+      "noms": ["Mamadou Diallo"]
+    },
+    {
+      "langue": "fr",
+      "texte": "Rose Boulanger et Pierre Charpentier sont absents cette semaine.",
+      "noms": ["Rose Boulanger", "Pierre Charpentier"]
+    },
+    {
+      "langue": "fr",
+      "texte": "Le colis de madame de La Fontaine est arrivé à Lyon hier.",
+      "noms": ["de La Fontaine"]
+    },
+    {
+      "langue": "fr",
+      "texte": "Aïcha El Amrani souhaite modifier son adresse de livraison.",
+      "noms": ["Aïcha El Amrani"]
+    },
+    {
+      "langue": "fr",
+      "texte": "Merci de prévenir Élodie, du service comptabilité, avant vendredi.",
+      "noms": ["Élodie"]
+    },
+    {
+      "langue": "fr",
+      "texte": "bonjour c'est lucas martin, j'ai un souci avec mon abonnement",
+      "noms": ["lucas martin"]
+    },
+    {
+      "langue": "fr",
+      "texte": "DUPONT Marie, née le 4 avril 1987, a déposé une réclamation.",
+      "noms": ["DUPONT Marie"]
+    },
+    {
+      "langue": "fr",
+      "texte": "Le client Yann Le Goff conteste le prélèvement du mois de mai.",
+      "noms": ["Yann Le Goff"]
+    },
+    {
+      "langue": "fr",
+      "texte": "D'après Inès, la livraison était prévue mardi chez François Garnier.",
+      "noms": ["Inès", "François Garnier"]
+    },
+    {
+      "langue": "fr",
+      "texte": "Le délai de rétractation est de quatorze jours à compter de la réception.",
+      "noms": []
+    },
+    {
+      "langue": "fr",
+      "texte": "Notre agence de Bordeaux est ouverte du lundi au vendredi, de 9 h à 18 h.",
+      "noms": []
+    },
+    {
+      "langue": "fr",
+      "texte": "La société Transports Brénaval livre en France et en Belgique.",
+      "noms": []
+    },
+    {
+      "langue": "fr",
+      "texte": "Le forfait Sérénité comprend l'assistance et le dépannage à domicile.",
+      "noms": []
+    },
+    {
+      "langue": "fr",
+      "texte": "La garantie couvre les pièces pendant deux ans, hors usure normale.",
+      "noms": []
+    },
+    {
+      "langue": "en",
+      "texte": "Hi, this is Emily Carter calling about invoice 2291.",
+      "noms": ["Emily Carter"]
+    },
+    {
+      "langue": "en",
+      "texte": "Please forward the report to Rajesh Patel and Laura O'Brien by Friday.",
+      "noms": ["Rajesh Patel", "Laura O'Brien"]
+    },
+    {
+      "langue": "en",
+      "texte": "The contract was approved by Dr. Samuel Okafor last week.",
+      "noms": ["Samuel Okafor"]
+    },
+    {
+      "langue": "en",
+      "texte": "Our returns policy allows refunds within thirty days of delivery.",
+      "noms": []
+    },
+    { "langue": "en", "texte": "The London office is closed on public holidays.", "noms": [] },
+    {
+      "langue": "de",
+      "texte": "Guten Tag, hier spricht Katharina Müller, es geht um meine Bestellung.",
+      "noms": ["Katharina Müller"]
+    },
+    {
+      "langue": "de",
+      "texte": "Herr Jürgen Schneider hat den Vertrag am Montag unterschrieben.",
+      "noms": ["Jürgen Schneider"]
+    },
+    { "langue": "de", "texte": "Die Lieferung erfolgt innerhalb von fünf Werktagen.", "noms": [] },
+    {
+      "langue": "es",
+      "texte": "Buenos días, soy María Fernández López y llamo por mi factura.",
+      "noms": ["María Fernández López"]
+    },
+    {
+      "langue": "es",
+      "texte": "El señor Javier Ortega solicitó el cambio de domicilio.",
+      "noms": ["Javier Ortega"]
+    },
+    { "langue": "es", "texte": "La garantía cubre las piezas durante dos años.", "noms": [] },
+    {
+      "langue": "it",
+      "texte": "Buongiorno, sono Giulia Romano e chiamo per il mio ordine.",
+      "noms": ["Giulia Romano"]
+    },
+    {
+      "langue": "it",
+      "texte": "Il signor Alessandro De Luca ha firmato il contratto ieri.",
+      "noms": ["Alessandro De Luca"]
+    },
+    { "langue": "it", "texte": "La consegna avviene entro cinque giorni lavorativi.", "noms": [] }
+  ]
+}

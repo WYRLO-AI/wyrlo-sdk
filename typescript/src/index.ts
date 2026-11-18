@@ -36,7 +36,11 @@ import {
   type IndexDeleteResponse,
   type IndexPutRequest,
   type IndexPutResponse,
+  type GapsReport,
   type IndexStatsResponse,
+  type QualityReport,
+  type RegressionCase,
+  type RegressionResponse,
   type IndexTenantDeleteResponse,
   type PrepareResponse,
   type SearchRequest,
@@ -45,11 +49,21 @@ import {
   type SkippedStep,
 } from "./contract.ts";
 import { maskTexts, unmaskText } from "./masking.ts";
+import { maskTextsWithNames, type NameFinder } from "./names-core.ts";
 
 export * from "./contract.ts";
 export { maskTexts, unmaskText, type MaskedTexts } from "./masking.ts";
+export { maskTextsWithNames, type NameFinder, type NameSpan } from "./names-core.ts";
 
-/** Adresse par défaut de l'API (option `baseUrl` ou variable d'environnement `WYRLO_BASE_URL`). */
+/**
+ * Adresse par défaut de l'API : le domaine api.wyrlo.io (point d'entrée `/guard`). Depuis
+ * le virage API du 05/11/2026, il est servi par une route du site de WYRLO hébergée à Paris,
+ * qui transmet chaque appel à l'API (fonction guard, Paris) sans cache ni journal de
+ * contenu, à la place du relais Scaleway. Le SDK n'est publié qu'une fois ce domaine actif
+ * (décision du 01/10/2026). Source unique : le SDK Python et le site la recopient, un test
+ * vérifie qu'ils restent identiques. Modifiable par l'option `baseUrl` ou la variable
+ * d'environnement `WYRLO_BASE_URL` (l'adresse Supabase directe reste valable).
+ */
 export const DEFAULT_BASE_URL = "https://api.wyrlo.io/functions/v1";
 export const SDK_VERSION = "0.1.2";
 /**
@@ -98,11 +112,15 @@ export interface WyrloOptions {
    * - une fonction : la vôtre (par exemple Presidio sur votre machine, pour les noms de
    *   personnes). Elle reçoit tous les textes d'un appel et rend autant de textes masqués ;
    *   gardez une même marque pour une même valeur. Les valeurs ne sont pas remises.
+   * - `{ names: détecteur }` : les règles ci-dessus, plus les noms de personnes trouvés par
+   *   un détecteur qui tourne sur votre machine (`transformersNames()` de
+   *   `@wyrlo/sdk/names`, bibliothèque gratuite). Un modèle peut manquer un nom : voir la
+   *   documentation. Les vraies valeurs sont remises comme avec `true`.
    * Si le masquage échoue, rien n'est envoyé : réponse transmise sans vérification
    * (`degraded`, étape « anonymize » sautée), comme pour une panne de WYRLO.
    * Par défaut : désactivé (WYRLO masque de son côté, avec les mêmes règles).
    */
-  mask?: boolean | Masker;
+  mask?: boolean | Masker | NamesMask;
   /** Implémentation de fetch (tests, environnements particuliers). */
   fetch?: typeof fetch;
 }
@@ -111,10 +129,18 @@ export interface WyrloOptions {
 export type Masker = (texts: string[]) => string[] | Promise<string[]>;
 
 /** Masquage côté client appliqué à cet appel (null : aucun). */
+/** Option `mask` : règles intégrées et noms de personnes trouvés par un détecteur local. */
+export interface NamesMask {
+  names: NameFinder;
+}
+
 export interface LocalMasking {
-  /** « rules » : règles intégrées au SDK ; « custom » : votre fonction. */
-  method: "rules" | "custom";
-  /** Remplacements par type (règles intégrées seulement), sans aucune valeur. */
+  /**
+   * « rules » : règles intégrées au SDK ; « rules+names » : règles et noms de personnes
+   * (type « PERSONNE ») ; « custom » : votre fonction.
+   */
+  method: "rules" | "rules+names" | "custom";
+  /** Remplacements par type (pas avec votre fonction), sans aucune valeur. */
   counts: Record<string, number> | null;
 }
 
@@ -221,6 +247,8 @@ export interface AnswerOutcome extends AnswerResponse {
 
 /** Délai par défaut de `answer()` : un modèle rédige, c'est plus long qu'une vérification. */
 export const ANSWER_TIMEOUT_MS = 60_000;
+/** Questions par appel de `regression()` (limite de l'API). */
+export const REGRESSION_BATCH = 25;
 
 /** Paramètre `?tenant=` des routes sans corps (mode C). */
 const tenantQuery = (tenant?: string) => (tenant ? `?tenant=${encodeURIComponent(tenant)}` : "");
@@ -285,7 +313,10 @@ type MaskOutcome =
   | { ok: false };
 
 /** Masque les textes d'un appel ; tout échec (exception, réponse invalide) → ok: false. */
-async function applyMask(mask: boolean | Masker, texts: string[]): Promise<MaskOutcome> {
+async function applyMask(
+  mask: boolean | Masker | NamesMask,
+  texts: string[],
+): Promise<MaskOutcome> {
   try {
     if (typeof mask === "function") {
       const out = await mask([...texts]);
@@ -298,12 +329,13 @@ async function applyMask(mask: boolean | Masker, texts: string[]): Promise<MaskO
       }
       return { ok: true, texts: out, restore: (t) => t, info: { method: "custom", counts: null } };
     }
-    const masked = maskTexts(texts);
+    const names = typeof mask === "object" ? mask.names : null;
+    const masked = names ? await maskTextsWithNames(texts, names) : maskTexts(texts);
     return {
       ok: true,
       texts: masked.texts,
       restore: (t) => unmaskText(t, masked.values),
-      info: { method: "rules", counts: masked.counts },
+      info: { method: names ? "rules+names" : "rules", counts: masked.counts },
     };
   } catch {
     return { ok: false };
@@ -321,7 +353,7 @@ export class Wyrlo {
   private readonly timeoutMs: number;
   private readonly maxRetries: number;
   private readonly doFetch: typeof fetch;
-  private readonly mask: boolean | Masker;
+  private readonly mask: boolean | Masker | NamesMask;
 
   constructor(options: WyrloOptions = {}) {
     const apiKey = options.apiKey ?? env("WYRLO_API_KEY");
@@ -563,7 +595,7 @@ export class Wyrlo {
       // Forme inattendue : valeurs remises (règles intégrées), sinon la question d'origine.
       const query = payload.query.startsWith(question)
         ? input.question + payload.query.slice(question.length)
-        : this.mask === true
+        : typeof this.mask !== "function"
           ? restore(payload.query)
           : input.question;
       return {
@@ -736,6 +768,95 @@ export class Wyrlo {
     );
     if (out.kind !== "ok") throw this.callError(out);
     return out.payload as IndexStatsResponse;
+  }
+
+  /**
+   * Rapport de lacunes (`GET /guard/gaps`) : sujets demandés et absents de vos documents,
+   * classés par nombre de questions sur `days` jours (30 par défaut, 365 au plus), avec une
+   * suggestion de document. Avec `tenant`, le rapport d'un seul client final (nombres
+   * seulement). Lecture seule : rien n'est compté au quota.
+   */
+  async gaps(
+    options: { days?: number; tenant?: string; timeoutMs?: number } = {},
+  ): Promise<GapsReport> {
+    const query = new URLSearchParams();
+    if (options.days !== undefined) query.set("days", String(options.days));
+    if (options.tenant) query.set("tenant", options.tenant);
+    const suffix = query.size ? `?${query.toString()}` : "";
+    const out = await this.call(
+      "GET",
+      `/guard/gaps${suffix}`,
+      null,
+      options.timeoutMs ?? this.timeoutMs,
+    );
+    if (out.kind !== "ok") throw this.callError(out);
+    return out.payload as GapsReport;
+  }
+
+  /**
+   * Rapport de qualité hebdomadaire (`GET /guard/quality`) : pour chacune des `weeks`
+   * dernières semaines (8 par défaut, 26 au plus), questions, réponses données, « je ne sais
+   * pas », non vérifiées, injections bloquées, niveaux de confiance, avis des utilisateurs
+   * finaux. Avec `tenant`, le rapport d'un seul client final. Lecture seule.
+   */
+  async quality(
+    options: { weeks?: number; tenant?: string; timeoutMs?: number } = {},
+  ): Promise<QualityReport> {
+    const query = new URLSearchParams();
+    if (options.weeks !== undefined) query.set("weeks", String(options.weeks));
+    if (options.tenant) query.set("tenant", options.tenant);
+    const suffix = query.size ? `?${query.toString()}` : "";
+    const out = await this.call(
+      "GET",
+      `/guard/quality${suffix}`,
+      null,
+      options.timeoutMs ?? this.timeoutMs,
+    );
+    if (out.kind !== "ok") throw this.callError(out);
+    return out.payload as QualityReport;
+  }
+
+  /**
+   * Test de non-régression (`POST /guard/regression`) : compare deux versions de votre RAG
+   * sur un jeu de questions de référence. Pour chaque question, `a` et `b` portent les
+   * passages et la réponse de chaque version. Le jeu est envoyé par lots de 25 questions,
+   * l'un après l'autre ; les statistiques rendues portent sur tout le jeu (taux, écart,
+   * intervalles de confiance à 95 %, test de McNemar, verdict).
+   *
+   * Chaque vérification compte dans le quota (deux par question). Rien n'est enregistré.
+   */
+  async regression(
+    cases: RegressionCase[],
+    options: { timeoutMs?: number } = {},
+  ): Promise<RegressionResponse> {
+    if (cases.length === 0) throw new WyrloError(422, "invalid_request", "cases: liste vide");
+    // Un identifiant par question, stable d'un lot à l'autre.
+    const all = cases.map((c, index) => ({ ...c, id: c.id ?? String(index + 1) }));
+    let merged: RegressionResponse | null = null;
+    for (let start = 0; start < all.length; start += REGRESSION_BATCH) {
+      const out = await this.call(
+        "POST",
+        "/guard/regression",
+        {
+          cases: all.slice(start, start + REGRESSION_BATCH),
+          ...(merged ? { carry: merged.table } : {}),
+        },
+        options.timeoutMs ?? ANSWER_TIMEOUT_MS,
+      );
+      if (out.kind !== "ok") throw this.callError(out);
+      const batch = out.payload as RegressionResponse;
+      merged = merged
+        ? {
+            cases: [...merged.cases, ...batch.cases],
+            skipped: merged.skipped + batch.skipped,
+            verifications: merged.verifications + batch.verifications,
+            // Tableau et statistiques cumulés par le serveur (grâce à `carry`).
+            table: batch.table,
+            stats: batch.stats,
+          }
+        : batch;
+    }
+    return merged as RegressionResponse;
   }
 
   /**

@@ -32,6 +32,10 @@
     "./documents": {
       "types": "./dist/documents.d.ts",
       "default": "./dist/documents.js"
+    },
+    "./names": {
+      "types": "./dist/names.d.ts",
+      "default": "./dist/names.js"
     }
   },
   "main": "./dist/index.js",

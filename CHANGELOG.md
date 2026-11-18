@@ -20,6 +20,16 @@ Not published on any registry. Interfaces may still change.
 - `context` on the passages you index: the table headers or section title of a passage,
   used for the vectors only.
 - `ocr()` in `wyrlo` (Python): reads a scanned PDF. The service route is closed by default.
+- Reports and tests in `@wyrlo/sdk` and `wyrlo`: `gaps()` (topics your users ask about that
+  your documents do not cover, by period and end customer), `quality()` (week by week) and
+  `regression()` (compare two versions of your RAG on a reference set, with confidence
+  intervals and a McNemar test; nothing is stored).
+- Names of people masked on your machine before sending: `mask: { names: transformersNames() }`
+  (`@wyrlo/sdk/names`, optional `@huggingface/transformers`) and
+  `mask={"names": spacy_names(...)}` (`wyrlo.names`, extra `wyrlo[names]`). A language model
+  makes mistakes: see the README for what was measured.
+- An answer that is itself a refusal ("I couldn't find this in the documents") now comes back
+  as `abstain` from the service: nothing to change in your code.
 - New preview folders: `go/`, `php/`, `java/`, `csharp/` (clients generated from the
   OpenAPI specification, see `PREVIEW.md`; the C# client has not been compiled yet) and
   `n8n/` (n8n node, not yet run in a real n8n).

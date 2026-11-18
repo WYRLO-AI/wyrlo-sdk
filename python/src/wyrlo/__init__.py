@@ -57,7 +57,13 @@ __all__ = [
 
 __version__ = "0.1.2"
 API_VERSION = "2026-09-25"
-#: Adresse par défaut de l'API (``base_url`` ou variable d'environnement ``WYRLO_BASE_URL``).
+#: Adresse par défaut de l'API : le domaine api.wyrlo.io (point d'entrée ``/guard``).
+#: Depuis le virage API du 05/11/2026, il est servi par une route du site de WYRLO
+#: hébergée à Paris, qui transmet chaque appel à l'API (fonction guard, Paris) sans cache
+#: ni journal de contenu, à la place du relais Scaleway. Le SDK n'est publié qu'une fois
+#: ce domaine actif. Copie de ``DEFAULT_BASE_URL`` du SDK TypeScript (source unique, un
+#: test y vérifie l'égalité). Modifiable par ``base_url`` ou la variable d'environnement
+#: ``WYRLO_BASE_URL`` (l'adresse Supabase directe reste valable).
 DEFAULT_BASE_URL = "https://api.wyrlo.io/functions/v1"
 
 
@@ -143,9 +149,10 @@ class GuardPassage:
 class LocalMasking:
     """Masquage fait sur votre machine avant l'envoi (option ``mask``)."""
 
-    #: « rules » : règles intégrées au SDK ; « custom » : votre fonction.
+    #: « rules » : règles intégrées au SDK ; « rules+names » : règles et noms de personnes
+    #: (type « PERSONNE ») ; « custom » : votre fonction.
     method: str
-    #: Remplacements par type (règles intégrées seulement), sans aucune valeur.
+    #: Remplacements par type (pas avec votre fonction), sans aucune valeur.
     counts: Optional[Dict[str, int]] = None
 
 
@@ -236,6 +243,7 @@ def _normalize_passages(passages: Sequence[PassageInput]) -> List[Dict[str, Any]
 
 
 #: Délai par défaut de ``answer`` (secondes) : un modèle rédige, c'est plus long.
+REGRESSION_BATCH = 25
 ANSWER_TIMEOUT = 60.0
 
 #: Champs de l'adresse d'un passage (mode B), dans les résultats de ``search``.
@@ -275,7 +283,7 @@ def _identite(texte: str) -> str:
 
 
 def _appliquer_masque(
-    mask: Union[bool, Masker], texts: List[str]
+    mask: Union[bool, Masker, Mapping[str, Any]], texts: List[str]
 ) -> Optional[tuple]:
     """Masque les textes d'un appel : (textes, restauration, LocalMasking), ou None en échec."""
     try:
@@ -288,11 +296,17 @@ def _appliquer_masque(
             ):
                 return None
             return list(out), _identite, LocalMasking("custom", None)
-        masque = mask_texts(texts)
+        names = mask.get("names") if isinstance(mask, Mapping) else None
+        if names is not None:
+            from .names import mask_texts_with_names
+
+            masque = mask_texts_with_names(texts, names)
+        else:
+            masque = mask_texts(texts)
         return (
             masque.texts,
             lambda t: unmask_text(t, masque.values),
-            LocalMasking("rules", dict(masque.counts)),
+            LocalMasking("rules+names" if names is not None else "rules", dict(masque.counts)),
         )
     except Exception:  # noqa: BLE001 - tout échec du masquage : rien n'est envoyé
         return None
@@ -320,7 +334,10 @@ class Wyrlo:
         d'identité, adresses postales, clés d'API), sur votre machine ; les vraies
         valeurs sont remises dans la raison et les phrases non appuyées. Une fonction :
         la vôtre (par exemple Presidio sur votre machine, pour les noms de personnes),
-        qui reçoit tous les textes d'un appel et rend autant de textes masqués. Si le
+        qui reçoit tous les textes d'un appel et rend autant de textes masqués.
+        ``{"names": détecteur}`` : les règles, plus les noms de personnes trouvés par un
+        détecteur qui tourne sur votre machine (``wyrlo.names.spacy_names()``,
+        bibliothèque gratuite) ; un modèle peut manquer un nom. Si le
         masquage échoue, rien n'est envoyé : réponse transmise sans vérification
         (``degraded``, étape « anonymize » sautée). Par défaut : désactivé.
     :param locale: langue des messages et des raisons (``reason``) renvoyés par l'API :
@@ -335,7 +352,7 @@ class Wyrlo:
         timeout: float = 3.0,
         max_retries: int = 1,
         region: Optional[str] = None,
-        mask: Union[bool, Masker, None] = None,
+        mask: Union[bool, Masker, Mapping[str, Any], None] = None,
         locale: Optional[str] = None,
     ) -> None:
         key = api_key if api_key is not None else os.environ.get("WYRLO_API_KEY")
@@ -367,7 +384,7 @@ class Wyrlo:
         self._language: Dict[str, str] = {"Accept-Language": locale} if locale else {}
         self._timeout = timeout
         self._max_retries = max(0, max_retries)
-        self._mask: Union[bool, Masker] = mask or False
+        self._mask: Union[bool, Masker, Mapping[str, Any]] = mask or False
 
     def guard(
         self,
@@ -535,7 +552,7 @@ class Wyrlo:
             # termes ajoutés ; forme inattendue : valeurs remises, sinon question d'origine.
             if query.startswith(sent):
                 query = question + query[len(sent) :]
-            elif self._mask is True:
+            elif not callable(self._mask):
                 query = restore(query)
             else:
                 query = question
@@ -690,6 +707,101 @@ class Wyrlo:
             None,
             timeout if timeout is not None else self._timeout,
         )
+
+    def gaps(
+        self,
+        days: Optional[int] = None,
+        tenant: Optional[str] = None,
+        timeout: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """Rapport de lacunes (``GET /guard/gaps``).
+
+        Sujets demandés et absents de vos documents, classés par nombre de questions sur
+        ``days`` jours (30 par défaut, 365 au plus), avec une suggestion de document. Avec
+        ``tenant``, le rapport d'un seul client final (nombres seulement). Lecture seule :
+        rien n'est compté au quota. Lève ``WyrloError`` pour toute erreur.
+        """
+        query = {}
+        if days is not None:
+            query["days"] = str(days)
+        if tenant:
+            query["tenant"] = tenant
+        suffix = "?" + urllib.parse.urlencode(query) if query else ""
+        return self._call_or_raise(
+            "GET",
+            "/guard/gaps" + suffix,
+            None,
+            timeout if timeout is not None else self._timeout,
+        )
+
+    def quality(
+        self,
+        weeks: Optional[int] = None,
+        tenant: Optional[str] = None,
+        timeout: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """Rapport de qualité hebdomadaire (``GET /guard/quality``).
+
+        Pour chacune des ``weeks`` dernières semaines (8 par défaut, 26 au plus) : questions,
+        réponses données, « je ne sais pas », non vérifiées, injections bloquées, niveaux de
+        confiance, avis des utilisateurs finaux. Avec ``tenant``, le rapport d'un seul client
+        final. Lecture seule. Lève ``WyrloError`` pour toute erreur.
+        """
+        query = {}
+        if weeks is not None:
+            query["weeks"] = str(weeks)
+        if tenant:
+            query["tenant"] = tenant
+        suffix = "?" + urllib.parse.urlencode(query) if query else ""
+        return self._call_or_raise(
+            "GET",
+            "/guard/quality" + suffix,
+            None,
+            timeout if timeout is not None else self._timeout,
+        )
+
+    def regression(
+        self, cases: List[Dict[str, Any]], timeout: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """Test de non-régression (``POST /guard/regression``).
+
+        Compare deux versions de votre RAG sur un jeu de questions de référence. Chaque
+        élément de ``cases`` porte ``question``, ``a`` et ``b`` (``passages`` et ``answer`` de
+        chaque version) et, au besoin, ``id`` et ``expected`` (``"answer"`` par défaut, ou
+        ``"abstain"``). Le jeu part par lots de 25 questions ; les statistiques rendues
+        portent sur tout le jeu : taux, écart, intervalles de confiance à 95 %, test de
+        McNemar, verdict.
+
+        Chaque vérification compte dans le quota (deux par question). Rien n'est enregistré.
+        Lève ``WyrloError`` pour toute erreur.
+        """
+        if not cases:
+            raise WyrloError(422, "invalid_request", "cases: liste vide")
+        numbered = [dict(case, id=case.get("id") or str(i + 1)) for i, case in enumerate(cases)]
+        merged: Optional[Dict[str, Any]] = None
+        for start in range(0, len(numbered), REGRESSION_BATCH):
+            body: Dict[str, Any] = {"cases": numbered[start : start + REGRESSION_BATCH]}
+            if merged is not None:
+                body["carry"] = merged["table"]
+            batch = self._call_or_raise(
+                "POST",
+                "/guard/regression",
+                body,
+                timeout if timeout is not None else ANSWER_TIMEOUT,
+            )
+            if merged is None:
+                merged = batch
+            else:
+                merged = {
+                    "cases": merged["cases"] + batch["cases"],
+                    "skipped": merged["skipped"] + batch["skipped"],
+                    "verifications": merged["verifications"] + batch["verifications"],
+                    # Tableau et statistiques cumulés par le serveur (grâce à ``carry``).
+                    "table": batch["table"],
+                    "stats": batch["stats"],
+                }
+        assert merged is not None
+        return merged
 
     def remove_tenant(self, tenant: str, timeout: Optional[float] = None) -> Dict[str, Any]:
         """Efface tout l'espace d'un client final (mode C) : ``DELETE /guard/index?tenant=…``.
