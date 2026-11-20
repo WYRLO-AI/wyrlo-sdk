@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <PackageId>Wyrlo</PackageId>
+    <Version>0.1.0-preview</Version>
+    <Description>WYRLO API client (preview): verify RAG answers against their sources, no-copy index, cited answers.</Description>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+  </PropertyGroup>
+</Project>

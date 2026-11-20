@@ -1,0 +1,37 @@
+{
+  "name": "n8n-nodes-wyrlo",
+  "version": "0.1.0-preview",
+  "description": "WYRLO for n8n (preview): verify a RAG answer against its sources, search the no-copy index, get a cited and verified answer.",
+  "keywords": [
+    "n8n-community-node-package",
+    "wyrlo",
+    "rag",
+    "hallucination",
+    "guardrails"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://www.wyrlo.io",
+  "author": {
+    "name": "WYRLO",
+    "email": "contact@wyrlo.io"
+  },
+  "private": true,
+  "main": "index.js",
+  "files": [
+    "credentials",
+    "nodes",
+    "index.js"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "credentials/WyrloApi.credentials.js"
+    ],
+    "nodes": [
+      "nodes/Wyrlo/Wyrlo.node.js"
+    ]
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  }
+}

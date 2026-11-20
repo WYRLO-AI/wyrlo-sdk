@@ -81,6 +81,53 @@ res = engine.query("Quel est le délai de rétractation ?")
 Passages envoyés : identifiant (`Document.id` ou `node_id`), texte, source
 (`metadata["source"]`, ou `file_name` pour LlamaIndex) et score s'il existe.
 
+Deux autres pièces, pour ce que vous avez déjà et pour la réponse en un appel (préversion) :
+
+```python
+from wyrlo.langchain import answer_chain, output_verifier
+
+# Vérification de sortie seule : votre chaîne a déjà rédigé la réponse.
+res = output_verifier().invoke({"question": q, "answer": reponse, "documents": docs})
+
+# Moteur de questions : votre retriever, puis WYRLO rédige et vérifie (POST /v1/answer).
+out = answer_chain(retriever).invoke("Quel est le délai de rétractation ?")
+print(out["answer"] or "Je ne sais pas.", out["sentences"])
+```
+
+```python
+from wyrlo.llamaindex import AnswerQueryEngine, verify_response
+
+res = verify_response(q, query_engine.query(q))            # vérification de sortie seule
+out = AnswerQueryEngine(index.as_retriever()).query(q)     # POST /v1/answer
+```
+
+## La réponse en un appel (préversion)
+
+`answer()` fait rédiger la réponse par un modèle à partir des passages, WYRLO la vérifie
+toujours, et elle revient phrase par phrase avec sa confiance et ses sources, ou en « je ne
+sais pas » avec des pistes. Préversion : la route peut encore changer.
+
+```python
+out = wyrlo.answer("Combien de temps le moteur est-il garanti ?", read=lire_chez_vous)   # index sans copie
+out = wyrlo.answer("Combien de temps le moteur est-il garanti ?", passages=mes_passages)  # vos passages
+
+if out["decision"] == "answer":
+    for phrase in out["sentences"]:
+        print(phrase["text"], phrase["sources"])
+else:
+    print("Je ne sais pas.", out["leads"])
+```
+
+- Qui rédige : `model={"provider": "openai", "name": "...", "api_key": "..."}` (aussi
+  `anthropic`, `mistral`, `azure_openai` et `openai_compatible` avec `base_url`). Sans
+  `model` : le modèle enregistré pour le projet s'il y en a un, sinon le modèle géré par
+  WYRLO (Europe, après masquage des données personnelles). Avec votre modèle, le texte part
+  tel quel chez votre fournisseur.
+- La clé de votre fournisseur ne sert qu'à l'appel ; elle n'est jamais gardée, renvoyée ni
+  journalisée.
+- Aucune réponse n'a pu être rédigée (clé, requête ou modèle refusés, service
+  injoignable) : `WyrloError`.
+
 ## Pannes : jamais bloquant
 
 Panne réseau, délai dépassé (3 s au total par défaut, nouvelle tentative comprise) ou erreur 5xx :
@@ -97,7 +144,8 @@ Une clé absente ou refusée, ou une requête invalide, lève `WyrloError`
 ## Options
 
 ```python
-Wyrlo(api_key="wyr_live_…", base_url=None, timeout=3.0, max_retries=1, region=None, mask=None)
+Wyrlo(api_key="wyr_live_…", base_url=None, timeout=3.0, max_retries=1, region=None,
+      mask=None, locale=None)
 ```
 
 `base_url` : par défaut `WYRLO_BASE_URL`, sinon `DEFAULT_BASE_URL` (exporté par le
@@ -110,6 +158,9 @@ retombe aussi sur Paris). Chaque appel envoie l'en-tête `X-Region` : sans lui, 
 exécuterait la fonction dans la région la plus proche de votre serveur (par exemple
 `us-east-1`), alors que la question, les passages et la réponse y arrivent en clair,
 avant masquage. L'en-tête de réponse `x-sb-edge-region` confirme la région de traitement.
+
+`locale` : langue de `reason` et des messages d'erreur de l'API. Anglais par défaut ;
+`"fr"` pour le français (envoyé dans l'en-tête `Accept-Language`).
 
 ## Masquage côté client
 
@@ -132,10 +183,37 @@ proche), adresses IP, numéros de passeport et de carte d'identité (avec un mot
 adresses postales (numéro et type de voie), clés d'API et jetons reconnaissables. Une
 même valeur reçoit la même marque dans la question, la réponse et les passages.
 
-**Non masqués** : les noms de personnes et d'entreprises, les adresses sans numéro ni type
-de voie (lieu-dit), et tout identifiant sans forme reconnaissable. Les dates, montants et numéros de commande restent aussi : la
-vérification doit pouvoir les comparer. Pour les noms, passez votre propre fonction, par
-exemple Presidio installé sur votre machine (rien n'en sort) :
+**Non masqués par les règles** : les noms de personnes et d'entreprises, les adresses sans
+numéro ni type de voie (lieu-dit), et tout identifiant sans forme reconnaissable. Les
+dates, montants et numéros de commande restent aussi : la vérification doit pouvoir les
+comparer.
+
+### Noms de personnes (préversion)
+
+Un nom n'a pas de forme fixe : il faut un modèle de langue pour le trouver. Le SDK peut en
+faire tourner un **sur votre machine**, avec une bibliothèque gratuite (spaCy,
+facultative) :
+
+```bash
+pip install "wyrlo[names]"
+python -m spacy download fr_core_news_md   # ou le modèle de votre langue
+```
+
+```python
+from wyrlo import Wyrlo
+from wyrlo.names import spacy_names
+
+wyrlo = Wyrlo(mask={"names": spacy_names("fr_core_news_md")})
+# Règles comme avec mask=True, plus les noms en [PERSONNE_1], [PERSONNE_2]…
+```
+
+Ce qu'il faut en attendre : un modèle se trompe. Sur notre petit jeu fictif (20 phrases en
+français, 18 noms), `fr_core_news_md` a trouvé 14 noms entiers, 3 en partie et en a manqué
+1, sans rien masquer à tort. C'est une mesure sur des phrases courtes et propres, pas une
+garantie : mesurez sur vos textes. Les noms d'entreprises et de lieux ne sont pas masqués.
+
+Pour aller plus loin, passez votre propre fonction, par exemple Presidio installé sur votre
+machine (rien n'en sort) :
 
 ```python
 from presidio_analyzer import AnalyzerEngine
@@ -213,6 +291,39 @@ wyrlo.index_stats()  # chiffres seulement, aucun identifiant
   change.
 - Limites : 5 000 documents (500 sur l'offre Gratuit) et 100 000 passages par projet ; 2 000 passages et
   400 000 caractères par document.
+
+### Lire vos documents (préversion)
+
+`wyrlo.documents` lit vos fichiers **sur votre machine** et les découpe selon leur
+structure ; seuls les passages partent pour les vecteurs, et WYRLO ne garde jamais le texte.
+
+```bash
+pip install "wyrlo[documents]"   # pdfplumber, python-docx, python-pptx, openpyxl (MIT)
+```
+
+```python
+from wyrlo.documents import read_document, split_document
+
+doc = read_document("tarifs.pdf")          # aussi .docx, .pptx, .xlsx, .html, .md, .txt
+wyrlo.index("tarifs.pdf", version="2026-11", passages=split_document(doc), title=doc.title)
+
+# Relecture pour search() et answer() : gardez doc.text chez vous (ou relisez le fichier) ;
+# chaque passage est la tranche doc.text[start:start + length].
+textes = {"tarifs.pdf": doc.text}
+out = wyrlo.answer(
+    "Combien de temps le moteur du Route 500 est-il garanti ?",
+    read=lambda document, version, start, length: textes[document][start : start + length],
+)
+```
+
+- Chaque ligne de tableau est écrite avec ses en-têtes (`Modèle : Route 500 | Prix :
+2 190 € | Garantie du moteur : 3 ans`) : une question sur une cellule retrouve la ligne
+  entière.
+- Un titre ouvre un passage et reste avec le texte qui le suit ; une ligne de tableau n'est
+  jamais coupée ; un long paragraphe est coupé à une fin de phrase.
+- Markdown, HTML et texte se lisent sans bibliothèque supplémentaire.
+- Non lus ici : les PDF scannés (images sans texte). Les PDF à plusieurs colonnes et les
+  tableaux sans traits peuvent mal se lire : essayez sur vos documents.
 
 ### Un espace par client final (mode C, plateformes)
 

@@ -1,0 +1,17 @@
+{
+  "name": "wyrlo/wyrlo",
+  "description": "WYRLO API client (preview): verify RAG answers against their sources, no-copy index, cited answers.",
+  "type": "library",
+  "license": "Apache-2.0",
+  "version": "0.1.0-preview",
+  "require": {
+    "php": ">=8.1",
+    "ext-curl": "*",
+    "ext-json": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "Wyrlo\\": "src/"
+    }
+  }
+}

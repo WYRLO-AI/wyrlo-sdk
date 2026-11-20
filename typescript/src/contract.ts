@@ -50,6 +50,13 @@ export interface GuardRequest {
   answer: string;
   passages: GuardPassageInput[];
   /**
+   * Client final pour lequel la vérification est faite (plateformes, offre Partenaire) :
+   * identifiant opaque, le même que pour l'index (mode C). Facultatif. La vérification est
+   * alors comptée pour ce client ; un nouveau client final est créé au premier usage, dans
+   * la limite de l'offre.
+   */
+  tenant?: string;
+  /**
    * Langue (« fr », « en », « en-GB »…). Elle décide des traitements : la vérification
    * phrase par phrase et le reclassement par modèle ne sont disponibles qu'en anglais.
    * Si elle manque, WYRLO la devine sur la question et la réponse, puis sur les passages
@@ -116,7 +123,7 @@ export interface GuardResponse {
    * rien n'a pu être vérifié.
    */
   confidence_score: number | null;
-  /** Explication courte, en français. */
+  /** Explication courte : en anglais par défaut, en français avec Accept-Language: fr. */
   reason: string;
   passages: GuardPassageResult[];
   /** Phrases de la réponse qu'aucun passage n'appuie (vérification phrase par phrase). */
@@ -233,7 +240,9 @@ export type ApiErrorCode =
    * Index sans copie (mode B) coupé pour le projet de la clé (403) : les routes
    * `/guard/index/…` et `/guard/search` ne sont ouvertes que sur demande.
    */
-  | "index_disabled";
+  | "index_disabled"
+  /** Lecture des PDF scannés (`POST /guard/ocr`) coupée : réglage fermé par défaut (403). */
+  | "ocr_disabled";
 
 /** Limites de l'index sans copie (mode B, incrément 1). */
 export const INDEX_LIMITS = {
@@ -251,6 +260,8 @@ export const INDEX_LIMITS = {
   tenant: 100,
   /** Titre d'un document, placé en tête de chaque passage pour le calcul des vecteurs. */
   title: 300,
+  /** Contexte d'un passage (en-têtes de tableau, titre de section), pour les vecteurs seulement. */
+  context: 300,
   /** Documents par lot (`POST /guard/index/documents`), dans la limite du corps (512 Kio). */
   batchDocuments: 100,
   /** Par projet (sans prix pour l'instant). */
@@ -262,8 +273,12 @@ export const INDEX_LIMITS = {
 export interface IndexPutRequest {
   version: string;
   text?: string;
-  /** Passages découpés par vous ; `start` : position du passage dans votre document. */
-  passages?: { text: string; start: number }[];
+  /**
+   * Passages découpés par vous ; `start` : position du passage dans votre document.
+   * `context` (facultatif) : en-têtes de son tableau ou titre de sa section, placés devant
+   * le passage pour le calcul des vecteurs seulement, jamais conservés.
+   */
+  passages?: { text: string; start: number; context?: string }[];
   labels?: string[];
   /**
    * Titre du document (300 caractères au plus). Placé en tête de chaque passage pour le
@@ -381,4 +396,201 @@ export interface SearchResult extends PassageAddress {
 export interface SearchResponse {
   results: SearchResult[];
   request_id?: string;
+}
+
+// -----------------------------------------------------------------------------
+// POST /guard/answer : la réponse complète en un appel (docs/conception-v1-answer.md)
+// -----------------------------------------------------------------------------
+
+/** Fournisseurs du modèle de rédaction ; « wyrlo » : modèle géré par WYRLO (Mistral, Europe). */
+export const ANSWER_PROVIDERS = [
+  "wyrlo",
+  "openai",
+  "anthropic",
+  "mistral",
+  "azure_openai",
+  "openai_compatible",
+] as const;
+export type AnswerProvider = (typeof ANSWER_PROVIDERS)[number];
+
+export interface AnswerModelInput {
+  provider: AnswerProvider;
+  /** Nom du modèle chez le fournisseur ; facultatif pour « wyrlo ». */
+  name?: string;
+  /** Clé du fournisseur, utilisée pour cet appel seulement : jamais gardée ni journalisée. */
+  api_key?: string;
+  /** Adresse de l'API (`azure_openai`, `openai_compatible`) : https obligatoire. */
+  base_url?: string;
+}
+
+export interface AnswerRequest {
+  question: string;
+  /** Passages relus chez vous (adresses de `/guard/search`) ou venus d'ailleurs. */
+  passages: GuardPassageInput[];
+  tenant?: string;
+  language?: string;
+  /** Absent : modèle enregistré pour le projet s'il existe, sinon modèle géré par WYRLO. */
+  model?: AnswerModelInput;
+  /** Réponse progressive (text/event-stream) : événements `draft` puis `final`. */
+  stream?: boolean;
+  request_id?: string;
+}
+
+export interface AnswerSentence {
+  text: string;
+  confidence: Confidence;
+  /** Identifiants des passages cités par cette phrase. */
+  sources: string[];
+  /** Faux : aucune source valable, ou phrase que la vérification n'appuie pas. */
+  supported: boolean;
+}
+
+export interface AnswerResponse {
+  /** Trace de la vérification ; null si rien n'a été rédigé (« je ne sais pas » du modèle). */
+  trace_id: string | null;
+  decision: Decision;
+  confidence: Confidence;
+  /** Texte complet ; null quand la décision est « abstain ». */
+  answer: string | null;
+  sentences: AnswerSentence[];
+  /** Pistes quand il n'y a pas de réponse : passages les plus proches, sans leur texte. */
+  leads: { id: string; source: string | null }[];
+  reason: string;
+  model: { provider: AnswerProvider; name: string };
+  usage: { input_tokens: number; output_tokens: number };
+  /** Vérification incomplète ou sautée (mode dégradé) : la réponse reste transmise. */
+  degraded: boolean;
+}
+
+/** GET /guard/gaps : un sujet demandé et absent des documents. */
+export interface Gap {
+  topic: string;
+  /** Questions sur ce sujet pendant la période. */
+  questions: number;
+  /** Clients finaux différents qui l'ont demandé. */
+  end_clients: number;
+  /** Premier et dernier jour (UTC, AAAA-MM-JJ) où le sujet a été demandé sur la période. */
+  first_seen: string;
+  last_seen: string;
+  /** Questions d'exemple ; toujours vide dans le rapport d'un client final. */
+  examples: string[];
+  /** Document à ajouter, dans la langue de l'appel. */
+  suggestion: string;
+}
+
+/** GET /guard/gaps : rapport de lacunes, du sujet le plus demandé au moins demandé. */
+export interface GapsReport {
+  days: number;
+  /** Client final du rapport ; null : tout le projet. */
+  tenant: string | null;
+  total_questions: number;
+  gaps: Gap[];
+}
+
+/** GET /guard/quality : une semaine du rapport de qualité (lundi à dimanche, UTC). */
+export interface QualityWeek {
+  week_start: string;
+  week_end: string;
+  /** Faux pour la semaine en cours, encore incomplète. */
+  complete: boolean;
+  questions: number;
+  answered: number;
+  abstained: number;
+  unverified: number;
+  injections: number;
+  certain: number;
+  probable: number;
+  uncertain: number;
+  helpful: number;
+  unhelpful: number;
+}
+
+/** GET /guard/quality : rapport de qualité hebdomadaire, de la semaine la plus récente à la plus ancienne. */
+export interface QualityReport {
+  weeks: number;
+  /** Client final du rapport ; null : tout le projet. */
+  tenant: string | null;
+  /** Plus ancienne question conservée : les semaines d'avant sont vides faute de données. */
+  first_trace_at: string | null;
+  periods: QualityWeek[];
+}
+
+/** POST /guard/regression : ce qu'une version de votre RAG a produit pour une question. */
+export interface RegressionVersionInput {
+  answer?: string;
+  passages: GuardPassageInput[];
+}
+
+/** POST /guard/regression : une question du jeu de référence, et ses deux versions. */
+export interface RegressionCase {
+  /** Identifiant dans votre jeu (par défaut, la position). */
+  id?: string;
+  question: string;
+  /** Ce qu'un bon RAG doit faire : répondre (par défaut) ou s'abstenir. */
+  expected?: "answer" | "abstain";
+  a: RegressionVersionInput;
+  b: RegressionVersionInput;
+}
+
+/** Tableau des paires : à renvoyer dans `carry` pour cumuler les lots. */
+export interface RegressionTable {
+  both_ok: number;
+  regressions: number;
+  fixes: number;
+  both_failed: number;
+}
+
+export interface RegressionRequest {
+  /** 25 questions au plus par appel. */
+  cases: RegressionCase[];
+  carry?: RegressionTable;
+}
+
+export interface RegressionVersionOutcome {
+  decision: Decision;
+  confidence: Confidence;
+  ok: boolean;
+}
+
+export interface RegressionCaseResult {
+  id: string;
+  expected: "answer" | "abstain";
+  /** null : cette version n'a pas pu être vérifiée. */
+  a: RegressionVersionOutcome | null;
+  b: RegressionVersionOutcome | null;
+  /** null : question écartée de la comparaison. */
+  change: "same" | "regression" | "fix" | null;
+}
+
+export interface RegressionRate {
+  ok: number;
+  /** Taux en pourcentage. */
+  rate: number | null;
+  /** Intervalle de confiance à 95 % (Wilson), en pourcentage. */
+  ci: [number, number] | null;
+}
+
+export interface RegressionStats {
+  compared: number;
+  a: RegressionRate;
+  b: RegressionRate;
+  /** Écart B − A en points, avec son intervalle de confiance à 95 %. */
+  difference: { points: number; ci: [number, number] } | null;
+  regressions: number;
+  fixes: number;
+  /** Test exact de McNemar, bilatéral. */
+  p_value: number;
+  /** « regression » ou « improvement » seulement si p < 0,05. */
+  verdict: "regression" | "improvement" | "no_significant_difference";
+  /** Jeu petit ou trop peu de désaccords : un écart réel peut rester invisible. */
+  small_sample: boolean;
+}
+
+export interface RegressionResponse {
+  cases: RegressionCaseResult[];
+  skipped: number;
+  /** Vérifications faites par cet appel, comptées au quota. */
+  verifications: number;
+  table: RegressionTable;
+  stats: RegressionStats;
 }

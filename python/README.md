@@ -32,7 +32,7 @@ if not res.should_answer:
 return res.answer  # cite res.kept_passages
 ```
 
-`res.reason` is a short explanation, currently in French.
+`res.reason` is a short explanation, in English (`locale="fr"` for French).
 
 Recommended: prepare the search with your settings' vocabulary, and pass the same request
 identifier to `guard`:
@@ -82,6 +82,52 @@ res = engine.query("What is the withdrawal period?")
 Passages sent: identifier (`Document.id` or `node_id`), text, source
 (`metadata["source"]`, or `file_name` for LlamaIndex) and score if any.
 
+Two more pieces, for what you already have and for the one-call answer (preview):
+
+```python
+from wyrlo.langchain import answer_chain, output_verifier
+
+# Output check only: your chain already wrote the answer.
+res = output_verifier().invoke({"question": q, "answer": answer, "documents": docs})
+
+# Question engine: your retriever, then WYRLO writes and verifies (POST /v1/answer).
+out = answer_chain(retriever).invoke("What is the withdrawal period?")
+print(out["answer"] or "I don't know.", out["sentences"])
+```
+
+```python
+from wyrlo.llamaindex import AnswerQueryEngine, verify_response
+
+res = verify_response(q, query_engine.query(q))            # output check only
+out = AnswerQueryEngine(index.as_retriever()).query(q)     # POST /v1/answer
+```
+
+## The answer in one call (preview)
+
+`answer()` has a model write the answer from the passages, WYRLO always verifies it, and
+the answer comes back sentence by sentence with its confidence and sources, or as "I don't
+know" with leads. Preview: the route may still change.
+
+```python
+out = wyrlo.answer("How long is the motor covered?", read=read_at_your_place)   # no-copy index
+out = wyrlo.answer("How long is the motor covered?", passages=my_passages)      # your passages
+
+if out["decision"] == "answer":
+    for sentence in out["sentences"]:
+        print(sentence["text"], sentence["sources"])
+else:
+    print("I don't know.", out["leads"])
+```
+
+- Who writes: `model={"provider": "openai", "name": "...", "api_key": "..."}` (also
+  `anthropic`, `mistral`, `azure_openai` and `openai_compatible` with `base_url`). Without
+  `model`: the model stored for the project if there is one, otherwise the WYRLO-managed
+  model (Europe, after masking personal data). With your model, the text goes as it is to
+  your provider.
+- Your provider key is only used for the call; it is never stored, returned or logged.
+- No answer could be written (key, request or model refused, service unreachable): raises
+  `WyrloError`.
+
 ## Outages: never blocking
 
 Network failure, timeout (3 s in total by default, retry included) or 5xx error: one retry
@@ -97,7 +143,8 @@ A missing or refused key, or an invalid request, raises `WyrloError`
 ## Options
 
 ```python
-Wyrlo(api_key="wyr_live_…", base_url=None, timeout=3.0, max_retries=1, region=None, mask=None)
+Wyrlo(api_key="wyr_live_…", base_url=None, timeout=3.0, max_retries=1, region=None,
+      mask=None, locale=None)
 ```
 
 `base_url`: default `WYRLO_BASE_URL`, otherwise `DEFAULT_BASE_URL` (exported by the
@@ -109,6 +156,9 @@ back to Paris). Each call sends the `X-Region` header: without it, Supabase woul
 function in the region closest to your server (for example `us-east-1`), while the
 question, passages and answer arrive there in clear, before masking. The
 `x-sb-edge-region` response header confirms the processing region.
+
+`locale`: language of `reason` and of the API error messages. English by default; `"fr"`
+for French (sent as the `Accept-Language` header).
 
 ## Client-side masking
 
@@ -130,10 +180,41 @@ addresses, passport and identity card numbers (with a keyword), postal addresses
 and street type), recognisable API keys and tokens. The same value gets the same marker in
 the question, the answer and the passages.
 
-**Not masked**: names of people and companies, addresses without a number or street type,
-and any identifier without a recognisable shape. Dates, amounts and order numbers stay
-too: verification must be able to compare them. For names, pass your own function, for
-example Presidio installed on your machine (nothing leaves it):
+**Not masked by the rules**: names of people and companies, addresses without a number or
+street type, and any identifier without a recognisable shape. Dates, amounts and order
+numbers stay too: verification must be able to compare them.
+
+### Names of people (preview)
+
+A name has no fixed shape: finding it takes a language model. The SDK can run one **on
+your machine**, with a free library (spaCy, optional):
+
+```bash
+pip install "wyrlo[names]"
+python -m spacy download fr_core_news_md   # or the model of your language
+```
+
+```python
+from wyrlo import Wyrlo
+from wyrlo.names import spacy_names
+
+wyrlo = Wyrlo(mask={"names": spacy_names("fr_core_news_md")})
+# Rules as with mask=True, plus names as [PERSONNE_1], [PERSONNE_2]…
+# res.local_masking: LocalMasking(method="rules+names", counts={"EMAIL": 1, "PERSONNE": 3})
+```
+
+A name recognised once is masked everywhere in the call, and the real values are put back
+in what the SDK returns.
+
+What to expect, honestly: a model makes mistakes. On our small fictional set (20 French
+sentences, 18 names), `fr_core_news_md` found 14 names in full, 3 in part and missed 1,
+with nothing masked by mistake; the small model (`fr_core_news_sm`) found 11 in full and
+missed 4. This is one measurement on short, clean sentences, not a guarantee: measure on
+your own texts. Company and place names are not masked. You can plug in another detector:
+any function that returns the `(start, end)` positions of the names in a text.
+
+To go further, pass your own function, for example Presidio installed on your machine
+(nothing leaves it):
 
 ```python
 from presidio_analyzer import AnalyzerEngine
@@ -211,6 +292,38 @@ wyrlo.index_stats()  # figures only, no identifier
   changes.
 - Limits: 5,000 documents (500 on the Free plan) and 100,000 passages per project; 2,000 passages and 400,000
   characters per document.
+
+### Reading your documents (preview)
+
+`wyrlo.documents` reads your files **on your machine** and cuts them along their structure;
+only the passages leave for the vectors, and WYRLO never keeps the text.
+
+```bash
+pip install "wyrlo[documents]"   # pdfplumber, python-docx, python-pptx, openpyxl (MIT)
+```
+
+```python
+from wyrlo.documents import read_document, split_document
+
+doc = read_document("prices.pdf")          # also .docx, .pptx, .xlsx, .html, .md, .txt
+wyrlo.index("prices.pdf", version="2026-11", passages=split_document(doc), title=doc.title)
+
+# Reading back for search() and answer(): keep doc.text at your place (or read the file
+# again); each passage is the slice doc.text[start:start + length].
+texts = {"prices.pdf": doc.text}
+out = wyrlo.answer(
+    "How long is the Route 500 motor covered?",
+    read=lambda document, version, start, length: texts[document][start : start + length],
+)
+```
+
+- Each table row is written with its headers (`Model : Route 500 | Price : 2 190 € | Motor
+warranty : 3 years`), so a question about one cell finds the whole row.
+- A heading opens a passage and stays with the text that follows; a table row is never cut;
+  a long paragraph is cut at the end of a sentence.
+- Markdown, HTML and plain text need no extra library.
+- Not read here: scanned PDFs (images without text). Multi-column PDFs and tables without
+  borders may read poorly: try it on your documents.
 
 ### One space per end customer (mode C, platforms)
 

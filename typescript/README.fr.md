@@ -71,6 +71,7 @@ const res = await wyrlo.guard({
 | `decision`              | `answer` ou `abstain` (« je ne sais pas »)                                                                           |
 | `confidence`            | `certain`, `probable`, `uncertain`, `unverified` (réponse transmise sans aucun contrôle)                             |
 | `confidence_score`      | Score de cohérence de la réponse (anglais), ou score des signaux (autres langues) ; null si rien n'a pu être vérifié |
+| `reason`                | Explication courte, en anglais (option `locale: "fr"` pour le français)                                              |
 | `passages[].kept`       | Passages à citer ; `injection: true` = écarté                                                                        |
 | `unsupported_sentences` | Phrases de la réponse qu'aucun passage n'appuie                                                                      |
 | `skipped_steps`         | Traitements sautés côté WYRLO (serveur lent ou indisponible)                                                         |
@@ -81,6 +82,35 @@ const res = await wyrlo.guard({
 | `quota_exceeded`        | Vrai si le plafond mensuel de l'offre gratuite est atteint (1 000 questions analysées)                               |
 | `settings_variant`      | Pendant un test partiel des réglages : `control` ou `candidate` ; null sinon                                         |
 | `trace_id`              | Identifiant de la trace dans votre espace WYRLO (null si la question n'a pas été analysée)                           |
+
+## La réponse en un appel (préversion)
+
+`answer()` fait rédiger la réponse par un modèle à partir des passages, WYRLO la vérifie
+toujours, et elle revient phrase par phrase avec sa confiance et ses sources, ou en « je ne
+sais pas » avec des pistes. Préversion : la route peut encore changer.
+
+```ts
+// Index sans copie : WYRLO cherche, votre fonction relit chaque passage chez vous.
+const out = await wyrlo.answer({ question, read: (hit) => lireChezVous(hit) });
+// Ou avec des passages que vous avez déjà.
+const out2 = await wyrlo.answer({ question, passages });
+
+if (out.decision === "answer") {
+  for (const phrase of out.sentences) console.log(phrase.text, phrase.sources);
+} else {
+  console.log("Je ne sais pas.", out.leads);
+}
+```
+
+- Qui rédige : `model: { provider: "openai", name: "...", apiKey: "..." }` (aussi
+  `anthropic`, `mistral`, `azure_openai` et `openai_compatible` avec `baseUrl`). Sans
+  `model` : le modèle enregistré pour le projet s'il y en a un, sinon le modèle géré par
+  WYRLO (Europe, après masquage des données personnelles). Avec votre modèle, le texte part
+  tel quel chez votre fournisseur.
+- La clé de votre fournisseur ne sert qu'à l'appel ; elle n'est jamais gardée, renvoyée ni
+  journalisée.
+- Aucune réponse n'a pu être rédigée (clé, requête ou modèle refusés, service
+  injoignable) : `WyrloError`.
 
 ## Pannes : jamais bloquant
 
@@ -105,6 +135,7 @@ new Wyrlo({
   timeoutMs: 3000, // au total, nouvelle tentative comprise
   maxRetries: 1,
   mask: false, // true : masquage sur votre serveur avant l'envoi (voir ci-dessous)
+  locale: "fr", // langue de reason et des erreurs de l'API : "en" (par défaut) ou "fr"
 });
 ```
 
@@ -129,10 +160,36 @@ de passeport et de carte d'identité (avec un mot-clé), adresses postales (num�
 de voie), clés d'API et jetons reconnaissables. Une même valeur reçoit la même marque
 dans la question, la réponse et les passages : la vérification reste exacte.
 
-**Non masqués** : les noms de personnes et d'entreprises, les adresses sans numéro ni type
-de voie (lieu-dit), et tout identifiant sans forme reconnaissable (numéro client interne…). Les dates, montants et numéros de commande
-restent aussi : la vérification doit pouvoir les comparer. Pour aller plus loin, passez
-votre propre fonction, par exemple un modèle de détection des noms qui tourne chez vous :
+**Non masqués par les règles** : les noms de personnes et d'entreprises, les adresses sans
+numéro ni type de voie (lieu-dit), et tout identifiant sans forme reconnaissable (numéro
+client interne…). Les dates, montants et numéros de commande restent aussi : la
+vérification doit pouvoir les comparer.
+
+### Noms de personnes (préversion)
+
+Un nom n'a pas de forme fixe : il faut un modèle de langue pour le trouver. Le SDK peut en
+faire tourner un **sur votre machine**, avec une bibliothèque gratuite
+(`npm install @huggingface/transformers`, facultatif) :
+
+```ts
+import { Wyrlo } from "@wyrlo/sdk";
+import { transformersNames } from "@wyrlo/sdk/names";
+
+const wyrlo = new Wyrlo({ mask: { names: transformersNames() } });
+// Règles comme avec `mask: true`, plus les noms en [PERSONNE_1], [PERSONNE_2]…
+```
+
+Au premier appel, la bibliothèque télécharge le fichier du modèle depuis Hugging Face
+(aucun texte n'est envoyé), puis le garde en cache. Un nom reconnu une fois est masqué
+partout dans l'appel, et les vraies valeurs sont remises dans ce que le SDK vous rend.
+
+Ce qu'il faut en attendre : un modèle se trompe. Sur notre petit jeu fictif (34 phrases en
+cinq langues, 28 noms), le modèle par défaut a trouvé 26 noms entiers, un en partie, et en a
+manqué un écrit sans majuscules ; il n'a rien masqué à tort. C'est une mesure sur des
+phrases courtes et propres, pas une garantie : mesurez sur vos textes. Les noms
+d'entreprises et de lieux ne sont pas masqués.
+
+Pour aller plus loin, passez votre propre fonction :
 
 ```ts
 const wyrlo = new Wyrlo({
@@ -219,6 +276,32 @@ await wyrlo.removeTenant("client-42"); // tout l'espace, tout de suite (fin de c
 
 Sans `tenant`, tout se passe dans l'espace par défaut du projet. Les limites restent
 celles du projet.
+
+## Lire vos documents (préversion)
+
+`@wyrlo/sdk/documents` lit vos fichiers **sur votre machine** et les découpe selon leur
+structure ; seuls les passages partent pour les vecteurs, et WYRLO ne garde jamais le texte.
+
+```ts
+import { readDocument, splitDocument } from "@wyrlo/sdk/documents";
+
+const doc = await readDocument("tarifs.docx"); // aussi .pdf, .html, .md, .txt
+await wyrlo.index({
+  document: "tarifs.docx",
+  version: "2026-11",
+  passages: splitDocument(doc),
+  title: doc.title,
+});
+// Relecture pour search() et answer() : doc.text.slice(start, start + length).
+```
+
+- Markdown, HTML, texte et DOCX se lisent sans dépendance (Node 18 ou plus). Les PDF avec
+  texte demandent `pdfjs-dist` (`npm install pdfjs-dist`).
+- Chaque ligne de tableau (Markdown, HTML, DOCX) est écrite avec ses en-têtes : une question
+  sur une cellule retrouve la ligne entière. Un titre ouvre un passage et reste avec la
+  suite.
+- Pas ici : les tableaux des PDF (lus comme de simples lignes), les PDF scannés, PPTX et
+  XLSX. Pour ceux-là, utilisez le SDK Python (`pip install "wyrlo[documents]"`).
 
 ## Adresse de l'API
 

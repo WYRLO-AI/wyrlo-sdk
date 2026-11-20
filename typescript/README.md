@@ -70,7 +70,7 @@ const res = await wyrlo.guard({
 | `decision`              | `answer` or `abstain` ("I don't know")                                                                                  |
 | `confidence`            | `certain`, `probable`, `uncertain`, `unverified` (answer passed through without any check)                              |
 | `confidence_score`      | Consistency score of the answer (English), or score of the signals (other languages); null if nothing could be verified |
-| `reason`                | Short explanation (currently in French)                                                                                 |
+| `reason`                | Short explanation, in English (option `locale: "fr"` for French)                                                        |
 | `passages[].kept`       | Passages to cite; `injection: true` = set aside                                                                         |
 | `unsupported_sentences` | Sentences of the answer that no passage supports                                                                        |
 | `skipped_steps`         | Processing steps skipped on the WYRLO side (slow or unavailable server)                                                 |
@@ -81,6 +81,34 @@ const res = await wyrlo.guard({
 | `quota_exceeded`        | True if the monthly cap of the free tier is reached (1,000 analysed questions)                                          |
 | `settings_variant`      | During a partial test of the settings: `control` or `candidate`; null otherwise                                         |
 | `trace_id`              | Identifier of the trace in your WYRLO space (null if the question was not analysed)                                     |
+
+## The answer in one call (preview)
+
+`answer()` has a model write the answer from the passages, WYRLO always verifies it, and
+the answer comes back sentence by sentence with its confidence and sources, or as "I don't
+know" with leads. Preview: the route may still change.
+
+```ts
+// No-copy index: WYRLO searches, your function reads each passage at your place.
+const out = await wyrlo.answer({ question, read: (hit) => readAtYourPlace(hit) });
+// Or with passages you already have.
+const out2 = await wyrlo.answer({ question, passages });
+
+if (out.decision === "answer") {
+  for (const sentence of out.sentences) console.log(sentence.text, sentence.sources);
+} else {
+  console.log("I don't know.", out.leads);
+}
+```
+
+- Who writes: `model: { provider: "openai", name: "...", apiKey: "..." }` (also
+  `anthropic`, `mistral`, `azure_openai` and `openai_compatible` with `baseUrl`). Without
+  `model`: the model stored for the project if there is one, otherwise the WYRLO-managed
+  model (Europe, after masking personal data). With your model, the text goes as it is to
+  your provider.
+- Your provider key is only used for the call; it is never stored, returned or logged.
+- No answer could be written (key, request or model refused, service unreachable): throws
+  `WyrloError`.
 
 ## Outages: never blocking
 
@@ -105,6 +133,7 @@ new Wyrlo({
   timeoutMs: 3000, // in total, retry included
   maxRetries: 1,
   mask: false, // true: masking on your server before sending (see below)
+  locale: "en", // language of reason and API errors: "en" (default) or "fr"
 });
 ```
 
@@ -128,10 +157,37 @@ card numbers (with a keyword), postal addresses (number and street type), recogn
 keys and tokens. The same value gets the same marker in the question, the answer and the
 passages: verification stays exact.
 
-**Not masked**: names of people and companies, addresses without a number or street type,
-and any identifier without a recognisable shape (internal customer number…). Dates,
-amounts and order numbers stay too: verification must be able to compare them. To go
-further, pass your own function, for example a name-detection model running on your side:
+**Not masked by the rules**: names of people and companies, addresses without a number or
+street type, and any identifier without a recognisable shape (internal customer number…).
+Dates, amounts and order numbers stay too: verification must be able to compare them.
+
+### Names of people (preview)
+
+A name has no fixed shape: finding it takes a language model. The SDK can run one **on
+your machine**, with a free library (`npm install @huggingface/transformers`, optional):
+
+```ts
+import { Wyrlo } from "@wyrlo/sdk";
+import { transformersNames } from "@wyrlo/sdk/names";
+
+const wyrlo = new Wyrlo({ mask: { names: transformersNames() } });
+// Rules as with `mask: true`, plus names as [PERSONNE_1], [PERSONNE_2]…
+// res.local_masking: { method: "rules+names", counts: { EMAIL: 1, PERSONNE: 3 } }
+```
+
+On first use the library downloads the model file from Hugging Face (no text is sent),
+then keeps it in its cache. A name recognised once is masked everywhere in the call, and
+the real values are put back in what the SDK returns.
+
+What to expect, honestly: a model makes mistakes. On our small fictional set (34
+sentences in French, English, German, Spanish and Italian, 28 names) the default model
+found 26 names in full, one in part ("de La Fontaine" without "de") and missed one written
+without capitals; it masked nothing by mistake. This is one measurement on short, clean
+sentences, not a guarantee: measure on your own texts. Company and place names are not
+masked. You can plug in another detector: any function that returns the positions of the
+names in a text (`NameFinder`).
+
+To go further, pass your own function:
 
 ```ts
 const wyrlo = new Wyrlo({
@@ -216,6 +272,31 @@ await wyrlo.removeTenant("client-42"); // the whole space, right away (end of co
 Without `tenant`, everything happens in the project's default space. The limits remain
 those of the project. Developer and Production plans (on the Free plan, a call with
 `tenant` is refused: 422 `invalid_request` on the `tenant` field).
+
+## Reading your documents (preview)
+
+`@wyrlo/sdk/documents` reads your files **on your machine** and cuts them along their
+structure; only the passages leave for the vectors, and WYRLO never keeps the text.
+
+```ts
+import { readDocument, splitDocument } from "@wyrlo/sdk/documents";
+
+const doc = await readDocument("prices.docx"); // also .pdf, .html, .md, .txt
+await wyrlo.index({
+  document: "prices.docx",
+  version: "2026-11",
+  passages: splitDocument(doc),
+  title: doc.title,
+});
+// Reading back for search() and answer(): doc.text.slice(start, start + length).
+```
+
+- Markdown, HTML, text and DOCX need no dependency (Node 18+). PDFs with text need
+  `pdfjs-dist` (`npm install pdfjs-dist`).
+- Each table row (Markdown, HTML, DOCX) is written with its headers, so a question about
+  one cell finds the whole row. A heading opens a passage and stays with what follows.
+- Not here: tables inside PDFs (read as plain lines), scanned PDFs, PPTX and XLSX. For
+  those, use the Python SDK (`pip install "wyrlo[documents]"`).
 
 ## API address
 

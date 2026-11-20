@@ -1,6 +1,6 @@
 {
   "name": "@wyrlo/sdk",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Stop RAG hallucinations: verify LLM answers against their sources and say \"I don't know\" instead of guessing.",
   "license": "Apache-2.0",
   "author": "Mayeul FLORY, entrepreneur individuel (FUSION-IA) <contact@wyrlo.io>",
@@ -28,6 +28,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./documents": {
+      "types": "./dist/documents.d.ts",
+      "default": "./dist/documents.js"
+    },
+    "./names": {
+      "types": "./dist/names.d.ts",
+      "default": "./dist/names.js"
     }
   },
   "main": "./dist/index.js",
@@ -52,8 +60,17 @@
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
+    "pdfjs-dist": "^6.5.438",
     "typescript": "~5.9.3",
     "vitest": "^5.0.1"
+  },
+  "peerDependencies": {
+    "pdfjs-dist": ">=4"
+  },
+  "peerDependenciesMeta": {
+    "pdfjs-dist": {
+      "optional": true
+    }
   },
   "repository": {
     "type": "git",

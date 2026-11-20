@@ -50,7 +50,12 @@ class FakeApi:
                         "method": self.command,
                         "path": self.path,
                         "headers": dict(self.headers),
-                        "body": json.loads(raw) if raw else None,
+                        # Corps JSON, ou fichier envoyé tel quel (octets gardés).
+                        "body": (
+                            (json.loads(raw) if raw else None)
+                            if "json" in (self.headers.get("Content-Type") or "json")
+                            else raw
+                        ),
                     }
                 )
                 index = min(len(api.calls) - 1, len(api.responses) - 1)
@@ -207,7 +212,7 @@ class GuardTests(unittest.TestCase):
         res = self.client().guard(question="Q ?", passages=[], answer="R.")
         self.assertEqual(len(self.api.calls), 1)
         self.assertTrue(res.degraded)
-        self.assertIn("surchargé", res.reason)
+        self.assertIn("overloaded", res.reason)
 
     def test_delai_total_par_defaut_de_3_s_nouvel_essai_compris(self):
         self.api.responses = [(200, OK, 4.0)]
@@ -279,6 +284,17 @@ class GuardTests(unittest.TestCase):
         self.assertEqual(region_of(region="eu-central-1"), "eu-central-1")
         os.environ["WYRLO_REGION"] = "  "
         self.assertEqual(region_of(), "eu-west-3")
+
+    def test_option_locale_en_tete_accept_language_absent_par_defaut(self):
+        self.api.responses = [(200, OK, 0)]
+
+        def language_of(**kwargs):
+            self.client(**kwargs).guard(question="Q ?", passages=[], answer="R.")
+            return self.api.calls[-1]["headers"].get("Accept-Language")
+
+        # Sans option, aucun en-tête : l'API répond en anglais.
+        self.assertIsNone(language_of())
+        self.assertEqual(language_of(locale="fr"), "fr")
 
 
 class PrepareTests(unittest.TestCase):
@@ -545,7 +561,7 @@ class MasquageTests(unittest.TestCase):
             self.assertEqual((res.decision, res.confidence), ("answer", "unverified"))
             self.assertIn("anonymize", res.skipped_steps)
             self.assertEqual(res.answer, self.ANSWER)
-            self.assertIn("Masquage local en échec", res.reason)
+            self.assertIn("Local masking failed", res.reason)
 
     def test_prepare_question_masquee_vraie_question_rendue(self):
         self.api.responses = [
@@ -649,6 +665,49 @@ class IndexTests(unittest.TestCase):
         self.client(mask=True).index("d", "v1", text="x", allow_unmasked=True)
         self.assertEqual(self.api.calls[0]["body"]["text"], "x")
 
+    def test_gaps_rapport_de_lacunes(self):
+        report = {"days": 7, "tenant": "client-1", "total_questions": 3, "gaps": [{"topic": "Garantie", "questions": 3}]}
+        self.api.responses = [(200, report, 0), (200, dict(report, tenant=None), 0)]
+        wyrlo = self.client()
+        self.assertEqual(wyrlo.gaps(days=7, tenant="client-1")["gaps"][0]["topic"], "Garantie")
+        self.assertEqual(self.api.calls[0]["method"], "GET")
+        self.assertEqual(self.api.calls[0]["path"], "/v1/guard/gaps?days=7&tenant=client-1")
+        wyrlo.gaps()
+        self.assertEqual(self.api.calls[1]["path"], "/v1/guard/gaps")
+
+    def test_quality_rapport_hebdomadaire(self):
+        report = {"weeks": 4, "tenant": None, "first_trace_at": None, "periods": []}
+        self.api.responses = [(200, report, 0), (200, report, 0)]
+        wyrlo = self.client()
+        self.assertEqual(wyrlo.quality(weeks=4, tenant="client-1")["weeks"], 4)
+        self.assertEqual(self.api.calls[0]["path"], "/v1/guard/quality?weeks=4&tenant=client-1")
+        wyrlo.quality()
+        self.assertEqual(self.api.calls[1]["path"], "/v1/guard/quality")
+
+    def test_regression_lots_de_25(self):
+        version = {"answer": "Deux ans.", "passages": [{"text": "Garantie de 2 ans."}]}
+        cases = [{"question": "Q ?", "a": version, "b": version} for _ in range(30)]
+        first = {"both_ok": 25, "regressions": 0, "fixes": 0, "both_failed": 0}
+
+        def batch(n, table, compared):
+            return {"cases": [{"id": str(i)} for i in range(n)], "skipped": 0, "verifications": 2 * n,
+                    "table": table, "stats": {"compared": compared}}
+
+        self.api.responses = [(200, batch(25, first, 25), 0), (200, batch(5, dict(first, both_ok=30), 30), 0)]
+        wyrlo = self.client()
+        result = wyrlo.regression(cases)
+        self.assertEqual(len(self.api.calls), 2)
+        self.assertEqual(self.api.calls[0]["path"], "/v1/guard/regression")
+        self.assertEqual(len(self.api.calls[0]["body"]["cases"]), 25)
+        self.assertNotIn("carry", self.api.calls[0]["body"])
+        self.assertEqual([c["id"] for c in self.api.calls[1]["body"]["cases"]], ["26", "27", "28", "29", "30"])
+        self.assertEqual(self.api.calls[1]["body"]["carry"], first)
+        self.assertEqual(len(result["cases"]), 30)
+        self.assertEqual(result["verifications"], 60)
+        self.assertEqual(result["stats"]["compared"], 30)
+        with self.assertRaises(WyrloError):
+            wyrlo.regression([])
+
     def test_remove_et_index_stats(self):
         self.api.responses = [
             (200, {"document": "d", "deleted": True}, 0),
@@ -726,6 +785,71 @@ class IndexTests(unittest.TestCase):
         )
         self.assertEqual(self.api.calls[1]["body"]["passages"][0]["address"], address)
         self.assertTrue(out.passages[0].stale)
+
+    def test_answer_cherche_relit_chez_le_client_et_envoie_les_textes(self):
+        doc = "Préambule. Le moteur est garanti 2 ans."
+        hit = {"document": "cgv", "version": "v1", "start": 11, "length": 28,
+               "fingerprint": self.FP, "index": 0, "labels": [], "score": 0.8}
+        final = {"trace_id": "t1", "decision": "answer", "confidence": "probable",
+                 "answer": "Le moteur est garanti 2 ans.",
+                 "sentences": [{"text": "Le moteur est garanti 2 ans.", "confidence": "probable",
+                                "sources": ["cgv#11"], "supported": True}],
+                 "leads": [], "reason": "ok", "model": {"provider": "wyrlo", "name": "petit"},
+                 "usage": {"input_tokens": 90, "output_tokens": 10}, "degraded": False}
+        self.api.responses = [(200, {"results": [hit]}, 0), (200, final, 0)]
+        out = self.client().answer(
+            "Garantie du moteur ?",
+            read=lambda document, version, start, length: doc[start : start + length],
+            tenant="client-1",
+            k=2,
+        )
+        self.assertEqual([c["path"].split("/guard")[-1] for c in self.api.calls], ["/search", "/answer"])
+        sent = self.api.calls[1]["body"]
+        self.assertEqual(sent["tenant"], "client-1")
+        self.assertEqual(sent["passages"][0]["text"], "Le moteur est garanti 2 ans.")
+        self.assertEqual(sent["passages"][0]["address"]["start"], 11)
+        self.assertNotIn("model", sent)
+        self.assertEqual(out["decision"], "answer")
+        self.assertEqual(out["sentences"][0]["sources"], ["cgv#11"])
+        self.assertEqual(out["request_id"], sent["request_id"])
+
+    def test_ocr_envoie_le_fichier_tel_quel_et_rend_les_pages(self):
+        pages = {"pages": [{"index": 0, "markdown": "# Bon fictif"}], "pages_processed": 1,
+                 "model": "ocr-fictif"}
+        self.api.responses = [(200, pages, 0)]
+        out = self.client().ocr(b"%PDF-1.7 contenu fictif")
+        self.assertEqual(out["pages"][0]["markdown"], "# Bon fictif")
+        call = self.api.calls[0]
+        self.assertTrue(call["path"].endswith("/guard/ocr"))
+        self.assertEqual(call["headers"].get("Content-Type"), "application/pdf")
+        self.assertEqual(call["body"], b"%PDF-1.7 contenu fictif")
+        # Fermé par défaut côté service : l'erreur porte le code.
+        self.api.responses = [(403, {"error": {"code": "ocr_disabled", "message": "x"}}, 0)]
+        with self.assertRaises(WyrloError) as raised:
+            self.client().ocr(b"%PDF-1.7")
+        self.assertEqual(raised.exception.code, "ocr_disabled")
+
+    def test_answer_avec_passages_et_modele_du_client_puis_refus(self):
+        self.api.responses = [(200, {"decision": "abstain", "answer": None}, 0)]
+        out = self.client().answer(
+            "Q ?",
+            passages=[{"id": "p1", "text": "Texte."}],
+            model={"provider": "openai", "name": "modele-fictif", "api_key": "cle-fictive"},
+        )
+        self.assertEqual(len(self.api.calls), 1)
+        self.assertEqual(
+            self.api.calls[0]["body"]["model"],
+            {"provider": "openai", "name": "modele-fictif", "api_key": "cle-fictive"},
+        )
+        self.assertEqual(out["decision"], "abstain")
+        with self.assertRaises(WyrloError):
+            self.client().answer("Q ?")
+        self.api.responses = [(422, {"error": {"code": "invalid_request", "message": "x"}}, 0)]
+        with self.assertRaises(WyrloError):
+            self.client().answer("Q ?", passages=[])
+        self.api.responses = [(503, {}, 0)]
+        with self.assertRaises(WyrloError):
+            self.client().answer("Q ?", passages=[])
 
     def test_search_en_panne_liste_vide_degradee_et_403_leve(self):
         for status in (503, 500, 421):

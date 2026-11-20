@@ -23,6 +23,9 @@
  */
 
 import {
+  type AnswerProvider,
+  type AnswerRequest,
+  type AnswerResponse,
   API_VERSION,
   type ApiErrorCode,
   type GuardPassageInput,
@@ -33,21 +36,28 @@ import {
   type IndexDeleteResponse,
   type IndexPutRequest,
   type IndexPutResponse,
+  type GapsReport,
   type IndexStatsResponse,
+  type QualityReport,
+  type RegressionCase,
+  type RegressionResponse,
   type IndexTenantDeleteResponse,
   type PrepareResponse,
   type SearchRequest,
   type SearchResponse,
+  type SearchResult,
   type SkippedStep,
 } from "./contract.ts";
 import { maskTexts, unmaskText } from "./masking.ts";
+import { maskTextsWithNames, type NameFinder } from "./names-core.ts";
 
 export * from "./contract.ts";
 export { maskTexts, unmaskText, type MaskedTexts } from "./masking.ts";
+export { maskTextsWithNames, type NameFinder, type NameSpan } from "./names-core.ts";
 
 /** Adresse par défaut de l'API (option `baseUrl` ou variable d'environnement `WYRLO_BASE_URL`). */
 export const DEFAULT_BASE_URL = "https://api.wyrlo.io/functions/v1";
-export const SDK_VERSION = "0.1.1";
+export const SDK_VERSION = "0.2.0";
 /**
  * Région d'exécution imposée à la fonction `guard` : Paris, région du projet (ADR 0003).
  *
@@ -81,6 +91,11 @@ export interface WyrloOptions {
    */
   maxRetries?: number;
   /**
+   * Langue des messages et des raisons (`reason`) renvoyés par l'API : « en » (anglais, par
+   * défaut) ou « fr » (français), par l'en-tête Accept-Language.
+   */
+  locale?: "en" | "fr";
+  /**
    * Masquage côté client, avant tout envoi (question, réponse, texte des passages) :
    * - `true` : les règles du masquage intégré de WYRLO (e-mails, téléphones, IBAN, cartes,
    *   numéro de sécurité sociale, adresses IP, pièces d'identité, adresses postales, clés
@@ -89,11 +104,15 @@ export interface WyrloOptions {
    * - une fonction : la vôtre (par exemple Presidio sur votre machine, pour les noms de
    *   personnes). Elle reçoit tous les textes d'un appel et rend autant de textes masqués ;
    *   gardez une même marque pour une même valeur. Les valeurs ne sont pas remises.
+   * - `{ names: détecteur }` : les règles ci-dessus, plus les noms de personnes trouvés par
+   *   un détecteur qui tourne sur votre machine (`transformersNames()` de
+   *   `@wyrlo/sdk/names`, bibliothèque gratuite). Un modèle peut manquer un nom : voir la
+   *   documentation. Les vraies valeurs sont remises comme avec `true`.
    * Si le masquage échoue, rien n'est envoyé : réponse transmise sans vérification
    * (`degraded`, étape « anonymize » sautée), comme pour une panne de WYRLO.
    * Par défaut : désactivé (WYRLO masque de son côté, avec les mêmes règles).
    */
-  mask?: boolean | Masker;
+  mask?: boolean | Masker | NamesMask;
   /** Implémentation de fetch (tests, environnements particuliers). */
   fetch?: typeof fetch;
 }
@@ -102,10 +121,18 @@ export interface WyrloOptions {
 export type Masker = (texts: string[]) => string[] | Promise<string[]>;
 
 /** Masquage côté client appliqué à cet appel (null : aucun). */
+/** Option `mask` : règles intégrées et noms de personnes trouvés par un détecteur local. */
+export interface NamesMask {
+  names: NameFinder;
+}
+
 export interface LocalMasking {
-  /** « rules » : règles intégrées au SDK ; « custom » : votre fonction. */
-  method: "rules" | "custom";
-  /** Remplacements par type (règles intégrées seulement), sans aucune valeur. */
+  /**
+   * « rules » : règles intégrées au SDK ; « rules+names » : règles et noms de personnes
+   * (type « PERSONNE ») ; « custom » : votre fonction.
+   */
+  method: "rules" | "rules+names" | "custom";
+  /** Remplacements par type (pas avec votre fonction), sans aucune valeur. */
   counts: Record<string, number> | null;
 }
 
@@ -175,6 +202,46 @@ export interface SearchInput {
   timeoutMs?: number;
 }
 
+/**
+ * `answer()` : la réponse complète en un appel (rédaction puis vérification).
+ * Deux façons de donner les passages :
+ * - `read` : WYRLO cherche dans l'index sans copie, votre fonction relit chaque passage chez
+ *   vous à partir de son adresse (WYRLO ne garde jamais le texte) ;
+ * - `passages` : vous les fournissez vous-même.
+ */
+export interface AnswerInput {
+  question: string;
+  /** Relit un passage chez vous ; `null` ou vide : passage ignoré. */
+  read?: (address: SearchResult) => Promise<string | null | undefined> | string | null | undefined;
+  /** Passages déjà en main (à la place de `read`). */
+  passages?: GuardPassageInput[];
+  /** Nombre de passages cherchés avec `read` (8 par défaut, 50 au plus). */
+  k?: number;
+  labelsAny?: string[];
+  keywordHits?: string[];
+  tenant?: string;
+  language?: string;
+  /**
+   * Modèle de rédaction. Absent : celui enregistré pour le projet s'il existe, sinon celui
+   * géré par WYRLO (Europe, après masquage). Le vôtre :
+   * `{ provider, name, apiKey }` (et `baseUrl` pour `azure_openai` et `openai_compatible`).
+   * La clé ne sert qu'à cet appel : elle n'est ni gardée ni journalisée.
+   */
+  model?: { provider: AnswerProvider; name?: string; apiKey?: string; baseUrl?: string };
+  requestId?: string;
+  /** Délai de l'appel de rédaction, en millisecondes (60 000 par défaut). */
+  timeoutMs?: number;
+}
+
+export interface AnswerOutcome extends AnswerResponse {
+  request_id: string;
+}
+
+/** Délai par défaut de `answer()` : un modèle rédige, c'est plus long qu'une vérification. */
+export const ANSWER_TIMEOUT_MS = 60_000;
+/** Questions par appel de `regression()` (limite de l'API). */
+export const REGRESSION_BATCH = 25;
+
 /** Paramètre `?tenant=` des routes sans corps (mode C). */
 const tenantQuery = (tenant?: string) => (tenant ? `?tenant=${encodeURIComponent(tenant)}` : "");
 
@@ -238,7 +305,10 @@ type MaskOutcome =
   | { ok: false };
 
 /** Masque les textes d'un appel ; tout échec (exception, réponse invalide) → ok: false. */
-async function applyMask(mask: boolean | Masker, texts: string[]): Promise<MaskOutcome> {
+async function applyMask(
+  mask: boolean | Masker | NamesMask,
+  texts: string[],
+): Promise<MaskOutcome> {
   try {
     if (typeof mask === "function") {
       const out = await mask([...texts]);
@@ -251,12 +321,13 @@ async function applyMask(mask: boolean | Masker, texts: string[]): Promise<MaskO
       }
       return { ok: true, texts: out, restore: (t) => t, info: { method: "custom", counts: null } };
     }
-    const masked = maskTexts(texts);
+    const names = typeof mask === "object" ? mask.names : null;
+    const masked = names ? await maskTextsWithNames(texts, names) : maskTexts(texts);
     return {
       ok: true,
       texts: masked.texts,
       restore: (t) => unmaskText(t, masked.values),
-      info: { method: "rules", counts: masked.counts },
+      info: { method: names ? "rules+names" : "rules", counts: masked.counts },
     };
   } catch {
     return { ok: false };
@@ -269,10 +340,12 @@ export class Wyrlo {
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly region: string;
+  /** En-tête Accept-Language (option `locale`), vide sans option. */
+  private readonly language: Record<string, string>;
   private readonly timeoutMs: number;
   private readonly maxRetries: number;
   private readonly doFetch: typeof fetch;
-  private readonly mask: boolean | Masker;
+  private readonly mask: boolean | Masker | NamesMask;
 
   constructor(options: WyrloOptions = {}) {
     const apiKey = options.apiKey ?? env("WYRLO_API_KEY");
@@ -280,7 +353,7 @@ export class Wyrlo {
       throw new WyrloError(
         0,
         "missing_api_key",
-        "Clé d'API manquante : passez apiKey ou définissez WYRLO_API_KEY.",
+        "Missing API key: pass apiKey or set WYRLO_API_KEY.",
       );
     }
     this.apiKey = apiKey;
@@ -294,11 +367,12 @@ export class Wyrlo {
       throw new WyrloError(
         0,
         "insecure_base_url",
-        "Adresse de l'API refusée : https exigé (la clé partirait en clair).",
+        "API address refused: https required (the key would be sent in clear text).",
       );
     }
     // Une valeur vide retombe sur Paris : ne jamais laisser la région au hasard.
     this.region = options.region?.trim() || env("WYRLO_REGION")?.trim() || DEFAULT_REGION;
+    this.language = options.locale ? { "accept-language": options.locale } : {};
     this.timeoutMs = options.timeoutMs ?? 3_000;
     this.maxRetries = Math.max(0, options.maxRetries ?? 1);
     this.doFetch = options.fetch ?? globalThis.fetch.bind(globalThis);
@@ -331,7 +405,7 @@ export class Wyrlo {
       if (!masked.ok) {
         return this.degradedResult(input, answer, requestId, started, {
           reason:
-            "Masquage local en échec : rien n'a été envoyé à WYRLO, réponse transmise sans vérification.",
+            "Local masking failed: nothing was sent to WYRLO, answer passed through without verification.",
           steps: [...ALL_STEPS, "anonymize"],
           localMasking: null,
         });
@@ -359,6 +433,8 @@ export class Wyrlo {
       passages,
       ...(input.language ? { language: input.language } : {}),
       request_id: requestId,
+      // Client final (plateformes) : la vérification est comptée pour lui.
+      ...(input.tenant ? { tenant: input.tenant } : {}),
     };
 
     // Délai total : nouvelles tentatives comprises, jamais au-delà de `timeoutMs`.
@@ -401,8 +477,8 @@ export class Wyrlo {
 
     return this.degradedResult(input, answer, requestId, started, {
       reason: overloaded
-        ? "WYRLO momentanément surchargé : réponse transmise sans vérification."
-        : "WYRLO injoignable : réponse transmise sans vérification.",
+        ? "WYRLO temporarily overloaded: answer passed through without verification."
+        : "WYRLO unreachable: answer passed through without verification.",
       steps: ALL_STEPS,
       localMasking,
     });
@@ -486,6 +562,7 @@ export class Wyrlo {
           "x-wyrlo-sdk": `typescript/${SDK_VERSION}`,
           "x-wyrlo-api-version": API_VERSION,
           "x-region": this.region,
+          ...this.language,
         },
         body: JSON.stringify({ question, request_id: requestId }),
         signal: controller.signal,
@@ -498,7 +575,7 @@ export class Wyrlo {
         throw new WyrloError(
           response.status,
           error?.code ?? "invalid_request",
-          error?.message ?? `Requête refusée (${response.status}).`,
+          error?.message ?? `Request refused (${response.status}).`,
           error?.details,
         );
       }
@@ -510,7 +587,7 @@ export class Wyrlo {
       // Forme inattendue : valeurs remises (règles intégrées), sinon la question d'origine.
       const query = payload.query.startsWith(question)
         ? input.question + payload.query.slice(question.length)
-        : this.mask === true
+        : typeof this.mask !== "function"
           ? restore(payload.query)
           : input.question;
       return {
@@ -550,6 +627,7 @@ export class Wyrlo {
           "x-wyrlo-sdk": `typescript/${SDK_VERSION}`,
           "x-wyrlo-api-version": API_VERSION,
           "x-region": this.region,
+          ...this.language,
         },
         body: JSON.stringify({ trace_id: input.traceId, helpful: input.helpful }),
         signal: controller.signal,
@@ -562,7 +640,7 @@ export class Wyrlo {
         throw new WyrloError(
           response.status,
           error?.code ?? "invalid_request",
-          error?.message ?? `Requête refusée (${response.status}).`,
+          error?.message ?? `Request refused (${response.status}).`,
           error?.details,
         );
       }
@@ -588,7 +666,7 @@ export class Wyrlo {
       throw new WyrloError(
         0,
         "mask_unsupported",
-        "Option mask active : index() n'envoie pas votre texte sans allowUnmasked: true.",
+        "mask option on: index() does not send your text without allowUnmasked: true.",
       );
     }
     const body: IndexPutRequest = {
@@ -629,7 +707,7 @@ export class Wyrlo {
       throw new WyrloError(
         0,
         "mask_unsupported",
-        "Option mask active : indexMany() n'envoie pas votre texte sans allowUnmasked: true.",
+        "mask option on: indexMany() does not send your text without allowUnmasked: true.",
       );
     }
     const body: IndexBatchRequest = {
@@ -685,6 +763,95 @@ export class Wyrlo {
   }
 
   /**
+   * Rapport de lacunes (`GET /guard/gaps`) : sujets demandés et absents de vos documents,
+   * classés par nombre de questions sur `days` jours (30 par défaut, 365 au plus), avec une
+   * suggestion de document. Avec `tenant`, le rapport d'un seul client final (nombres
+   * seulement). Lecture seule : rien n'est compté au quota.
+   */
+  async gaps(
+    options: { days?: number; tenant?: string; timeoutMs?: number } = {},
+  ): Promise<GapsReport> {
+    const query = new URLSearchParams();
+    if (options.days !== undefined) query.set("days", String(options.days));
+    if (options.tenant) query.set("tenant", options.tenant);
+    const suffix = query.size ? `?${query.toString()}` : "";
+    const out = await this.call(
+      "GET",
+      `/guard/gaps${suffix}`,
+      null,
+      options.timeoutMs ?? this.timeoutMs,
+    );
+    if (out.kind !== "ok") throw this.callError(out);
+    return out.payload as GapsReport;
+  }
+
+  /**
+   * Rapport de qualité hebdomadaire (`GET /guard/quality`) : pour chacune des `weeks`
+   * dernières semaines (8 par défaut, 26 au plus), questions, réponses données, « je ne sais
+   * pas », non vérifiées, injections bloquées, niveaux de confiance, avis des utilisateurs
+   * finaux. Avec `tenant`, le rapport d'un seul client final. Lecture seule.
+   */
+  async quality(
+    options: { weeks?: number; tenant?: string; timeoutMs?: number } = {},
+  ): Promise<QualityReport> {
+    const query = new URLSearchParams();
+    if (options.weeks !== undefined) query.set("weeks", String(options.weeks));
+    if (options.tenant) query.set("tenant", options.tenant);
+    const suffix = query.size ? `?${query.toString()}` : "";
+    const out = await this.call(
+      "GET",
+      `/guard/quality${suffix}`,
+      null,
+      options.timeoutMs ?? this.timeoutMs,
+    );
+    if (out.kind !== "ok") throw this.callError(out);
+    return out.payload as QualityReport;
+  }
+
+  /**
+   * Test de non-régression (`POST /guard/regression`) : compare deux versions de votre RAG
+   * sur un jeu de questions de référence. Pour chaque question, `a` et `b` portent les
+   * passages et la réponse de chaque version. Le jeu est envoyé par lots de 25 questions,
+   * l'un après l'autre ; les statistiques rendues portent sur tout le jeu (taux, écart,
+   * intervalles de confiance à 95 %, test de McNemar, verdict).
+   *
+   * Chaque vérification compte dans le quota (deux par question). Rien n'est enregistré.
+   */
+  async regression(
+    cases: RegressionCase[],
+    options: { timeoutMs?: number } = {},
+  ): Promise<RegressionResponse> {
+    if (cases.length === 0) throw new WyrloError(422, "invalid_request", "cases: liste vide");
+    // Un identifiant par question, stable d'un lot à l'autre.
+    const all = cases.map((c, index) => ({ ...c, id: c.id ?? String(index + 1) }));
+    let merged: RegressionResponse | null = null;
+    for (let start = 0; start < all.length; start += REGRESSION_BATCH) {
+      const out = await this.call(
+        "POST",
+        "/guard/regression",
+        {
+          cases: all.slice(start, start + REGRESSION_BATCH),
+          ...(merged ? { carry: merged.table } : {}),
+        },
+        options.timeoutMs ?? ANSWER_TIMEOUT_MS,
+      );
+      if (out.kind !== "ok") throw this.callError(out);
+      const batch = out.payload as RegressionResponse;
+      merged = merged
+        ? {
+            cases: [...merged.cases, ...batch.cases],
+            skipped: merged.skipped + batch.skipped,
+            verifications: merged.verifications + batch.verifications,
+            // Tableau et statistiques cumulés par le serveur (grâce à `carry`).
+            table: batch.table,
+            stats: batch.stats,
+          }
+        : batch;
+    }
+    return merged as RegressionResponse;
+  }
+
+  /**
    * Efface tout l'espace d'un client final (mode C) : `DELETE /guard/index?tenant=…`, tout de
    * suite, même mode B coupé. Rend le nombre de documents et de passages effacés. Lève une
    * `WyrloError` pour toute erreur, panne comprise.
@@ -693,7 +860,7 @@ export class Wyrlo {
     tenant: string,
     options: { timeoutMs?: number } = {},
   ): Promise<IndexTenantDeleteResponse> {
-    if (!tenant) throw new WyrloError(0, "invalid_request", "tenant : identifiant attendu.");
+    if (!tenant) throw new WyrloError(0, "invalid_request", "tenant: identifier expected.");
     const out = await this.call(
       "DELETE",
       `/guard/index${tenantQuery(tenant)}`,
@@ -738,6 +905,75 @@ export class Wyrlo {
     return { results: payload.results, request_id: requestId, degraded: false };
   }
 
+  /**
+   * La réponse complète en un appel (`POST /guard/answer`) : un modèle rédige à partir des
+   * passages, WYRLO vérifie toujours, et la réponse revient phrase par phrase avec sa
+   * confiance et ses sources. `decision: "abstain"` : « je ne sais pas », avec des pistes.
+   * Lève une `WyrloError` si la clé, la requête ou le modèle sont refusés, ou si le service
+   * est injoignable : sans réponse rédigée, il n'y a rien à transmettre en mode dégradé.
+   */
+  async answer(input: AnswerInput): Promise<AnswerOutcome> {
+    const requestId = input.requestId ?? newRequestId();
+    let passages = input.passages;
+    if (!passages) {
+      if (!input.read) {
+        throw new WyrloError(0, "invalid_request", "answer() needs `read` or `passages`.");
+      }
+      const found = await this.search({
+        question: input.question,
+        ...(input.k !== undefined ? { k: input.k } : {}),
+        ...(input.labelsAny ? { labelsAny: input.labelsAny } : {}),
+        ...(input.keywordHits ? { keywordHits: input.keywordHits } : {}),
+        ...(input.tenant ? { tenant: input.tenant } : {}),
+      });
+      passages = [];
+      for (const hit of found.results) {
+        const text = await input.read(hit);
+        if (typeof text !== "string" || !text.trim()) continue;
+        passages.push({
+          id: `${hit.document}#${hit.start}`,
+          text,
+          source: hit.document,
+          score: hit.score,
+          address: {
+            document: hit.document,
+            version: hit.version,
+            start: hit.start,
+            length: hit.length,
+            fingerprint: hit.fingerprint,
+          },
+        });
+      }
+    }
+    const model = input.model
+      ? {
+          provider: input.model.provider,
+          ...(input.model.name ? { name: input.model.name } : {}),
+          ...(input.model.apiKey ? { api_key: input.model.apiKey } : {}),
+          ...(input.model.baseUrl ? { base_url: input.model.baseUrl } : {}),
+        }
+      : undefined;
+    const body: AnswerRequest = {
+      question: input.question,
+      passages,
+      ...(input.tenant ? { tenant: input.tenant } : {}),
+      ...(input.language ? { language: input.language } : {}),
+      ...(model ? { model } : {}),
+      request_id: requestId,
+    };
+    const out = await this.call(
+      "POST",
+      "/guard/answer",
+      body,
+      input.timeoutMs ?? ANSWER_TIMEOUT_MS,
+    );
+    if (out.kind === "client_error") throw out.error;
+    if (out.kind !== "ok") {
+      throw new WyrloError(out.status, "unavailable", "WYRLO answer service unavailable.");
+    }
+    return { ...(out.payload as AnswerResponse), request_id: requestId };
+  }
+
   /** Appel simple (routes de l'index) : pas de nouvel essai, délai borné. */
   private async call(
     method: "GET" | "PUT" | "DELETE" | "POST",
@@ -761,6 +997,7 @@ export class Wyrlo {
           "x-wyrlo-api-version": API_VERSION,
           // Le texte d'un document est traité à Paris, pas dans la région la plus proche.
           "x-region": this.region,
+          ...this.language,
         },
         ...(body === null ? {} : { body: JSON.stringify(body) }),
         signal: controller.signal,
@@ -784,7 +1021,7 @@ export class Wyrlo {
         error: new WyrloError(
           response.status,
           error?.code ?? "invalid_request",
-          error?.message ?? `Requête refusée (${response.status}).`,
+          error?.message ?? `Request refused (${response.status}).`,
           error?.details,
         ),
       };
@@ -802,7 +1039,7 @@ export class Wyrlo {
     return new WyrloError(
       out.status,
       "unavailable",
-      "WYRLO injoignable ou momentanément surchargé : rien n'a été fait, réessayez plus tard.",
+      "WYRLO unreachable or temporarily overloaded: nothing was done, try again later.",
     );
   }
 
@@ -827,6 +1064,7 @@ export class Wyrlo {
           "x-wyrlo-api-version": API_VERSION,
           // Traitement du texte en clair à Paris, pas dans la région la plus proche.
           "x-region": this.region,
+          ...this.language,
         },
         body: JSON.stringify(body),
         signal: controller.signal,
@@ -845,7 +1083,7 @@ export class Wyrlo {
           error: new WyrloError(
             response.status,
             error?.code ?? "invalid_request",
-            error?.message ?? `Requête refusée (${response.status}).`,
+            error?.message ?? `Request refused (${response.status}).`,
             error?.details,
           ),
         };

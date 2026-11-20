@@ -16,6 +16,9 @@ function fakeClient(overrides: Partial<WyrloClient> = {}): WyrloClient {
     prepare: vi.fn(async (input) => ({ query: input.question, degraded: false }) as never),
     feedback: vi.fn(async () => ({ recorded: true })),
     search: vi.fn(async () => ({ results: [], request_id: "r", degraded: false })),
+    answer: vi.fn(
+      async () => ({ decision: "answer", answer: "14 jours.", sentences: [] }) as never,
+    ),
     ...overrides,
   };
 }
@@ -76,13 +79,14 @@ describe("serveur MCP", () => {
     expect((await handleMessage(client, { id: 4 }))?.error).toMatchObject({ code: -32600 });
   });
 
-  it("tools/list : les quatre outils, chacun avec un schéma d'entrée", async () => {
+  it("tools/list : les cinq outils, chacun avec un schéma d'entrée", async () => {
     const res = await handleMessage(fakeClient(), { jsonrpc: "2.0", id: 5, method: "tools/list" });
     const tools = (res?.result as { tools: typeof TOOLS }).tools;
     expect(tools.map((t) => t.name)).toEqual([
       "wyrlo_prepare",
       "wyrlo_search",
       "wyrlo_guard",
+      "wyrlo_answer",
       "wyrlo_feedback",
     ]);
     for (const t of tools) expect(t.inputSchema.type).toBe("object");
@@ -107,6 +111,39 @@ describe("serveur MCP", () => {
     const result = res?.result as { content: { text: string }[]; structuredContent: unknown };
     expect(JSON.parse(result.content[0]?.text ?? "")).toEqual(result.structuredContent);
     expect(result.structuredContent).toMatchObject({ decision: "answer" });
+  });
+
+  it("wyrlo_answer : question et passages transmis, espace du serveur imposé", async () => {
+    const client = fakeClient();
+    const res = await handleMessage(
+      client,
+      {
+        jsonrpc: "2.0",
+        id: 9,
+        method: "tools/call",
+        params: {
+          name: "wyrlo_answer",
+          arguments: {
+            question: "Délai ?",
+            passages: [{ id: "p1", text: "Le délai est de 14 jours." }],
+            language: "fr",
+            tenant: "autre-client",
+          },
+        },
+      },
+      { tenant: "client-1" },
+    );
+    expect(client.answer).toHaveBeenCalledWith({
+      question: "Délai ?",
+      passages: [{ id: "p1", text: "Le délai est de 14 jours." }],
+      language: "fr",
+      tenant: "client-1",
+    });
+    expect((res?.result as { structuredContent: unknown }).structuredContent).toMatchObject({
+      decision: "answer",
+    });
+    const bad = await call(client, "wyrlo_answer", { question: "Q ?", passages: [] });
+    expect((bad?.result as { isError?: boolean }).isError).toBe(true);
   });
 
   it("wyrlo_search, wyrlo_prepare, wyrlo_feedback : arguments traduits pour le SDK", async () => {

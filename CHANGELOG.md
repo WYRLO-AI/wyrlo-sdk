@@ -2,12 +2,49 @@
 
 All notable changes to the WYRLO SDKs. Versions follow [Semantic Versioning](https://semver.org).
 
-## 0.1.2 (2026-11-13), `@wyrlo/mcp` only
+## 0.2.0 (2026-11-20)
 
-- Everything the MCP server shows to agents is now in English: server instructions, tool
-  titles and descriptions, parameter descriptions and error messages. The tools, their
-  parameters and their results do not change.
-- `@wyrlo/sdk` and `wyrlo` stay at 0.1.1 (no change).
+Published for `@wyrlo/sdk` (npm) and `wyrlo` (PyPI). Includes everything from 0.1.2, which
+was never published on its own.
+
+- `answer()`: a model writes the answer from the passages, WYRLO always verifies it, and
+  the answer comes back sentence by sentence with its sources, or as "I don't know" with
+  leads (`POST /v1/answer`, preview route).
+- `gaps()`, `quality()` and `regression()`: knowledge gaps, weekly quality and
+  non-regression checks (preview routes).
+- `tenant` on `guard()`: the end customer a verification is made for (platforms).
+- Names of people masked on your machine before anything is sent: `mask: { names: … }`
+  (TypeScript, `@wyrlo/sdk/names`, optional `@huggingface/transformers`) and
+  `wyrlo[names]` (Python, spaCy). A language model can miss a name: measure on your own
+  texts first.
+- `wyrlo` (Python): `output_verifier` and `answer_chain` for LangChain, `verify_response`
+  and `AnswerQueryEngine` for LlamaIndex.
+- Reading your documents on your machine, then cutting them along their structure:
+  `wyrlo.documents` in Python (PDF with tables, DOCX, PPTX, XLSX, HTML, Markdown; extra
+  `wyrlo[documents]`), `@wyrlo/sdk/documents` in TypeScript (Markdown, HTML, DOCX, PDF with
+  text). Each table row carries its headers.
+- `context` on the passages you index: the table headers or section title of a passage,
+  used for the vectors only.
+- `ocr()` in `wyrlo` (Python): reads a scanned PDF. The service route is closed for now.
+
+Still in preview, not published: `go/`, `php/`, `java/` (published after a real test
+against the service), `csharp/` and `n8n/` (to be tried first), and `@wyrlo/mcp`
+(unchanged on npm).
+
+## 0.1.2 (2026-11-13)
+
+English by default, everywhere a developer reads a message.
+
+- The API answers in English by default: the `reason` of each decision and the error
+  messages. Send `Accept-Language: fr` to get them in French. The fields, codes and
+  decisions do not change.
+- `@wyrlo/sdk` and `wyrlo`: new `locale` option (`"en"` or `"fr"`), sent as the
+  `Accept-Language` header; without it, the API answers in English. The SDKs' own messages
+  (degraded mode, errors) are now in English.
+- `wyrlo` (LangChain and LlamaIndex integrations): the default prompt is now in English.
+- `@wyrlo/mcp`: everything the server shows to agents is now in English: server
+  instructions, tool titles and descriptions, parameter descriptions and error messages.
+  The tools, their parameters and their results do not change.
 
 ## 0.1.1 (2026-11-13)
 
