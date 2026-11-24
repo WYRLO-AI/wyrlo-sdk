@@ -1,3 +1,12 @@
+> [!WARNING]
+> **Archived on 24 November 2026.** WYRLO now maintains a single technical entry point: its
+> REST API. These SDKs (`wyrlo` on PyPI, `@wyrlo/sdk` and `@wyrlo/mcp` on npm) and the
+> integrations in this repository no longer receive updates; published versions stay
+> installable, nothing has been deleted. Call the API directly: copy-ready examples in curl,
+> Python, JavaScript, PHP and Java, run against the API before every release, are in the
+> [documentation](https://www.wyrlo.io/en/docs). For agents, use the remote MCP server
+> `https://api.wyrlo.io/mcp`.
+
 # @wyrlo/mcp
 
 MCP server for [WYRLO](https://www.wyrlo.io): your agent searches the no-copy index and
