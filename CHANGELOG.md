@@ -2,6 +2,12 @@
 
 All notable changes to the WYRLO SDKs. Versions follow [Semantic Versioning](https://semver.org).
 
+## 2026-11-24 — Archived
+
+WYRLO now maintains a single technical entry point, its REST API. The SDKs, the MCP package
+and the integrations in this repository are archived: no further updates. Published
+versions stay installable. Documentation: https://www.wyrlo.io/en/docs.
+
 ## 0.1.2 (2026-11-13), `@wyrlo/mcp` only
 
 - Everything the MCP server shows to agents is now in English: server instructions, tool

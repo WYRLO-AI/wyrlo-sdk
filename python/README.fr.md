@@ -1,3 +1,12 @@
+> [!WARNING]
+> **Archivé le 24 novembre 2026.** WYRLO ne maintient plus qu'une seule porte d'entrée
+> technique : son API REST. Ces SDK (`wyrlo` sur PyPI, `@wyrlo/sdk` et `@wyrlo/mcp` sur npm)
+> et les intégrations de ce dépôt ne reçoivent plus de mise à jour ; les versions publiées
+> restent installables, rien n'est supprimé. Appelez l'API directement : des exemples prêts à
+> copier en curl, Python, JavaScript, PHP et Java, exécutés contre l'API avant chaque mise en
+> ligne, sont dans la [documentation](https://www.wyrlo.io/docs). Pour les agents : le
+> serveur MCP distant `https://api.wyrlo.io/mcp`.
+
 # wyrlo
 
 [English](https://github.com/WYRLO-AI/wyrlo-sdk/blob/main/python/README.md)
